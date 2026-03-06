@@ -85,6 +85,7 @@ constructor(seed: string | Uint8Array)
 - `registerWallet<W>(blockchain: string, wallet: W, config: WalletConfig): WDK`
 - `registerProtocol<P>(blockchain: string, label: string, protocol: P, config: ProtocolConfig): WDK`
 - `registerMiddleware(blockchain: string, middleware: MiddlewareFunction): WDK`
+- `registerPolicies(policies: Array<Policy>): WDK`
 
 #### Get Accounts
 - `getAccount(blockchain: string, index?: number): Promise<IWalletAccountWithProtocols>`
@@ -134,6 +135,93 @@ const { hash, fee } = await paraswap.swap(swapOptions)
 wdk.registerMiddleware('ethereum', async (account) => {
   console.log('New account:', await account.getAddress())
 })
+```
+
+### Register Policies
+
+```typescript
+wdk.registerPolicies([
+  {
+    name: 'max-transfer-1eth',
+    method: 'sendTransaction',
+    evaluate({ method, params }) {
+      if (method !== 'sendTransaction') return true
+      return BigInt(params.value ?? 0) <= 10n ** 18n
+    }
+  }
+])
+```
+
+### Wallet-Specific Policy
+
+```typescript
+wdk.registerPolicies([
+  {
+    name: 'ethereum-only-bridge',
+    target: { blockchain: 'ethereum' },
+    method: 'bridge',
+    evaluate: () => false
+  }
+])
+```
+
+### Protocol-Targeted Policy
+
+```typescript
+wdk.registerPolicies([
+  {
+    name: 'swap-max-fee',
+    target: {
+      protocol: { blockchain: 'ethereum', label: 'paraswap' }
+    },
+    method: 'swap',
+    evaluate: () => false
+  }
+])
+```
+
+### Multiple Methods
+
+```typescript
+wdk.registerPolicies([
+  {
+    name: 'disable-critical-ops',
+    target: { blockchain: 'ethereum' },
+    method: ['bridge', 'borrow', 'repay'],
+    evaluate: () => false
+  }
+])
+```
+
+### Recipient Whitelist
+
+```typescript
+const allowed = new Set(['0xabc...', '0xdef...'])
+
+wdk.registerPolicies([
+  {
+    name: 'recipient-whitelist',
+    method: 'sendTransaction',
+    evaluate({ params }) {
+      if (!params?.to) return true
+      return allowed.has(params.to.toLowerCase())
+    }
+  }
+])
+```
+
+### Async Policy
+
+```typescript
+wdk.registerPolicies([
+  {
+    name: 'business-hours',
+    async evaluate() {
+      const hour = new Date().getUTCHours()
+      return hour >= 8 && hour < 18
+    }
+  }
+])
 ```
 
 ## License

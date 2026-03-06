@@ -28,6 +28,41 @@ export default class WdkManager {
     /** @private */
     private _middlewares;
     /**
+     *  @private
+     *  @type {Array<Policy>}
+     */
+    private _policies;
+    /**
+     * Register one or more wallet policies.
+     *
+     * Policies gate all mutating wallet methods.
+     *
+     * @param {Array<Policy>} policies
+     * @returns {WdkManager}
+     */
+    registerPolicies(policies?: Array<Policy>): WdkManager;
+    /**
+     * Runs policies sequentially.
+     *
+     * @param {Array<Policy>} policies
+     * @param {string} method
+     * @param {any} params
+     * @param {PolicyTarget} target
+     * @private
+     */
+    private _runPolicies;
+    /**
+     * Applies policies to a specific account or protocol instance.
+     * Policies are isolated per account.
+     *
+     * @template {typeof SwapProtocol | typeof BridgeProtocol | typeof LendingProtocol | typeof FiatProtocol | IWalletAccountWithProtocols} P
+     * @param {P} instance
+     * @param {PolicyTarget} target
+     * @returns {P}
+     * @private
+     */
+    private _withPolicyGate;
+    /**
      * Registers a new wallet to the wdk manager.
      *
      * @template {typeof WalletManager} W
@@ -101,6 +136,38 @@ export type IWalletAccount = import("@tetherto/wdk-wallet").IWalletAccount;
 export type FeeRates = import("@tetherto/wdk-wallet").FeeRates;
 export type IWalletAccountWithProtocols = import("./wallet-account-with-protocols.js").IWalletAccountWithProtocols;
 export type MiddlewareFunction = <A extends IWalletAccount>(account: A) => Promise<void>;
+export type PolicyTarget = {
+    /**
+     * - The account blockchain identifier this policy applies to.
+     */
+    blockchain?: string;
+    /**
+     * - The protocol this policy applies to.
+     */
+    protocol?: {
+        blockchain?: string;
+        label?: string;
+    };
+};
+export type PolicyEvaluator = (method: string, params: any, wallet: any) => boolean | Promise<boolean>;
+export type Policy = {
+    /**
+     * - The policy name.
+     */
+    name: string;
+    /**
+     * - Scopes the policy to a specific wallet or protocol.
+     */
+    target?: PolicyTarget;
+    /**
+     * - The method(s) to gate. If omitted, all methods are gated.
+     */
+    method?: string | string[];
+    /**
+     * - Evaluates whether the method call is allowed.
+     */
+    evaluate: PolicyEvaluator;
+};
 import WalletManager from "@tetherto/wdk-wallet";
 import { SwapProtocol } from "@tetherto/wdk-wallet/protocols";
 import { BridgeProtocol } from "@tetherto/wdk-wallet/protocols";

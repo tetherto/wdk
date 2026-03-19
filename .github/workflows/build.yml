@@ -7,25 +7,20 @@ on:
     branches: [main, develop]
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
-
+    name: Lint
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Node 22.19.0
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.19.0'
-          cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
-      
-      - name: Install dependencies
-        run: npm clean-install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      
-      - name: Lint code with standard
-        run: npm run lint
-      
-      - name: Run tests
-        run: npm test
+      - uses: tetherto/oss-actions/node-base@v1
+      - run: npm run lint
+  test:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    name: Test / ${{ matrix.platform }}
+    steps:
+      - uses: tetherto/oss-actions/node-base@v1
+      - run: npm test

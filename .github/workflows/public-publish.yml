@@ -1,0 +1,35 @@
+name: Release to public npm
+run-name: "Release (${{ inputs.bump }}${{ inputs.preid && format('-{0}', inputs.preid) || '' }})"
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump type
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - prerelease
+      preid:
+        description: Pre-release identifier
+        required: false
+        type: string
+      tag:
+        description: npm dist-tag
+        required: false
+        default: 'latest'
+        type: string
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  release:
+    uses: tetherto/oss-actions/.github/workflows/public-publish.yml@main
+    with:
+      bump: ${{ inputs.bump }}
+      preid: ${{ inputs.preid }}
+      tag: ${{ inputs.tag }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

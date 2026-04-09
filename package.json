@@ -1,6 +1,6 @@
 {
   "name": "@tetherto/wdk",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.0-beta.7",
   "description": "A flexible manager that can register and manage multiple wallet instances for different blockchains dynamically.",
   "keywords": [
     "wdk",

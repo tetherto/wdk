@@ -37,13 +37,7 @@ jest.unstable_mockModule('@walletconnect/utils', () => ({
   getSdkError: jest.fn((type) => ({ message: type, code: 0 }))
 }))
 
-jest.unstable_mockModule('@json-rpc-tools/utils', () => ({
-  formatJsonRpcResult: jest.fn((id, result) => ({ id, result, jsonrpc: '2.0' })),
-  formatJsonRpcError: jest.fn((id, message) => ({ id, error: { message }, jsonrpc: '2.0' }))
-}))
-
 const { default: WalletConnectHandler } = await import('../src/walletconnect-handler.js')
-const { formatJsonRpcResult, formatJsonRpcError } = await import('@json-rpc-tools/utils')
 
 describe('WalletConnectHandler', () => {
   let handler
@@ -177,10 +171,9 @@ describe('WalletConnectHandler', () => {
       await handler.respondRequest(1, 'topic-1', { result })
 
       // #then
-      expect(formatJsonRpcResult).toHaveBeenCalledWith(1, '0xsignature')
       expect(mockWalletKitInstance.respondSessionRequest).toHaveBeenCalledWith({
         topic: 'topic-1',
-        response: { id: 1, result: '0xsignature', jsonrpc: '2.0' }
+        response: { id: 1, jsonrpc: '2.0', result: '0xsignature' }
       })
     })
   })
@@ -195,10 +188,9 @@ describe('WalletConnectHandler', () => {
       await handler.rejectRequest(1, 'topic-1')
 
       // #then
-      expect(formatJsonRpcError).toHaveBeenCalledWith(1, 'USER_REJECTED')
       expect(mockWalletKitInstance.respondSessionRequest).toHaveBeenCalledWith({
         topic: 'topic-1',
-        response: expect.objectContaining({ id: 1 })
+        response: { id: 1, jsonrpc: '2.0', error: { code: -32000, message: 'USER_REJECTED' } }
       })
     })
 
@@ -207,7 +199,10 @@ describe('WalletConnectHandler', () => {
       await handler.rejectRequest(1, 'topic-1', 'custom error')
 
       // #then
-      expect(formatJsonRpcError).toHaveBeenCalledWith(1, 'custom error')
+      expect(mockWalletKitInstance.respondSessionRequest).toHaveBeenCalledWith({
+        topic: 'topic-1',
+        response: { id: 1, jsonrpc: '2.0', error: { code: -32000, message: 'custom error' } }
+      })
     })
   })
 

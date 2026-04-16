@@ -3,7 +3,14 @@
 import { WalletKit, isPaymentLink } from '@reown/walletkit'
 import { Core } from '@walletconnect/core'
 import { getSdkError } from '@walletconnect/utils'
-import { formatJsonRpcResult, formatJsonRpcError } from '@json-rpc-tools/utils'
+
+function formatJsonRpcResult (id, result) {
+  return { id, jsonrpc: '2.0', result }
+}
+
+function formatJsonRpcError (id, message) {
+  return { id, jsonrpc: '2.0', error: { code: -32000, message } }
+}
 
 /**
  * @typedef {import('events').EventEmitter} EventEmitter

@@ -23,13 +23,11 @@
     "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
   "dependencies": {
-    "@json-rpc-tools/utils": "^1.7.6",
     "@reown/walletkit": "^1.5.5",
     "@walletconnect/pay": "^1.0.8",
     "@tetherto/wdk-wallet": "^1.0.0-beta.6",
     "@walletconnect/utils": "^2.23.9",
-    "bare-node-runtime": "^1.1.4",
-    "tslib": "^2.8.1"
+    "bare-node-runtime": "^1.1.4"
   },
   "devDependencies": {
     "@walletconnect/sign-client": "^2.23.9",

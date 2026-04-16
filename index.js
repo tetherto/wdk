@@ -17,6 +17,7 @@
 /** @typedef {import('./src/wdk-manager.js').IWalletAccount} IWalletAccount */
 /** @typedef {import('./src/wdk-manager.js').FeeRates} FeeRates */
 /** @typedef {import('./src/wdk-manager.js').MiddlewareFunction} MiddlewareFunction */
+/** @typedef {import('./src/wdk-manager.js').WalletConnectConfig} WalletConnectConfig */
 
 /** @typedef {import('./src/wallet-account-with-protocols.js').IWalletAccountWithProtocols} IWalletAccountWithProtocols */
 

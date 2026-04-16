@@ -14,9 +14,13 @@
 
 'use strict'
 
+import { EventEmitter } from 'events'
+
 import WalletManager from '@tetherto/wdk-wallet'
 
 import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol } from '@tetherto/wdk-wallet/protocols'
+
+import WalletConnectHandler from './walletconnect-handler.js'
 
 /** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
 
@@ -24,9 +28,11 @@ import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol } from '@te
 
 /** @typedef {import('./wallet-account-with-protocols.js').IWalletAccountWithProtocols} IWalletAccountWithProtocols */
 
+/** @typedef {import('./walletconnect-handler.js').WalletConnectConfig} WalletConnectConfig */
+
 /** @typedef {<A extends IWalletAccount>(account: A) => Promise<void>} MiddlewareFunction */
 
-export default class WDK {
+export default class WDK extends EventEmitter {
   /**
    * Creates a new wallet development kit instance.
    *
@@ -34,6 +40,8 @@ export default class WDK {
    * @throws {Error} If the seed is not valid.
    */
   constructor (seed) {
+    super()
+
     if (!WDK.isValidSeed(seed)) {
       throw new Error('Invalid seed.')
     }
@@ -49,6 +57,9 @@ export default class WDK {
 
     /** @private */
     this._middlewares = { }
+
+    /** @private */
+    this._wc = new WalletConnectHandler(this)
   }
 
   /**
@@ -212,11 +223,216 @@ export default class WDK {
   }
 
   /**
+   * Initializes WalletConnect (WalletKit) and subscribes to session events.
+   * Events are emitted on this WDK instance: session_proposal, session_request,
+   * session_delete, session_authenticate, proposal_expire, session_request_expire, payment_link.
+   *
+   * @param {WalletConnectConfig} config
+   * @returns {Promise<WDK>}
+   */
+  async initWalletConnect (config) {
+    await this._wc.init(config)
+
+    return this
+  }
+
+  /**
+   * The underlying WalletKit instance. Available after initWalletConnect.
+   *
+   * @returns {import('@reown/walletkit').WalletKit | null}
+   */
+  get walletkit () {
+    return this._wc.walletkit
+  }
+
+  /**
+   * The WalletConnect Pay client. Available after initWalletConnect with payConfig.
+   *
+   * @returns {import('@reown/walletkit').IWalletKitPay | null}
+   */
+  get pay () {
+    return this._wc.pay
+  }
+
+  /**
+   * Pairs with a dApp via URI or detects a payment link.
+   * Payment links emit a 'payment_link' event instead of pairing.
+   *
+   * @param {string} uri
+   * @returns {Promise<void>}
+   */
+  async pair (uri) {
+    await this._wc.pair(uri)
+  }
+
+  /**
+   * Approves a session proposal. Passthrough to WalletKit — all params are forwarded as-is.
+   *
+   * @param {object} params
+   * @param {number} params.id
+   * @param {Record<string, object>} params.namespaces
+   * @param {object} [params.sessionProperties]
+   * @param {object} [params.scopedProperties]
+   * @param {object} [params.sessionConfig]
+   * @param {string} [params.relayProtocol]
+   * @param {object} [params.proposalRequestsResponses]
+   * @returns {Promise<object>} The session.
+   */
+  async approveSession (params) {
+    return this._wc.approveSession(params)
+  }
+
+  /**
+   * Rejects a session proposal.
+   *
+   * @param {number} id
+   * @returns {Promise<void>}
+   */
+  async rejectSession (id) {
+    await this._wc.rejectSession(id)
+  }
+
+  /**
+   * Responds to a session request with a result provided by the consumer.
+   *
+   * @param {number} id
+   * @param {string} topic
+   * @param {object} params
+   * @param {*} params.result
+   * @returns {Promise<void>}
+   */
+  async respondRequest (id, topic, { result }) {
+    await this._wc.respondRequest(id, topic, { result })
+  }
+
+  /**
+   * Rejects a session request.
+   *
+   * @param {number} id
+   * @param {string} topic
+   * @param {string} [message]
+   * @returns {Promise<void>}
+   */
+  async rejectRequest (id, topic, message) {
+    await this._wc.rejectRequest(id, topic, message)
+  }
+
+  /**
+   * Returns all active WalletConnect sessions.
+   *
+   * @returns {Record<string, object>}
+   */
+  getSessions () {
+    return this._wc.getSessions()
+  }
+
+  /**
+   * Returns all pending session proposals.
+   *
+   * @returns {Record<number, object>}
+   */
+  getPendingSessionProposals () {
+    return this._wc.getPendingSessionProposals()
+  }
+
+  /**
+   * Returns all pending session requests.
+   *
+   * @returns {object[]}
+   */
+  getPendingSessionRequests () {
+    return this._wc.getPendingSessionRequests()
+  }
+
+  /**
+   * Disconnects a WalletConnect session.
+   *
+   * @param {string} topic
+   * @returns {Promise<void>}
+   */
+  async disconnectSession (topic) {
+    await this._wc.disconnectSession(topic)
+  }
+
+  /**
+   * Updates a session's namespaces.
+   *
+   * @param {object} params
+   * @param {string} params.topic
+   * @param {Record<string, object>} params.namespaces
+   * @returns {Promise<{ acknowledged: () => Promise<void> }>}
+   */
+  async updateSession (params) {
+    return this._wc.updateSession(params)
+  }
+
+  /**
+   * Extends a session's expiry.
+   *
+   * @param {object} params
+   * @param {string} params.topic
+   * @returns {Promise<{ acknowledged: () => Promise<void> }>}
+   */
+  async extendSession (params) {
+    return this._wc.extendSession(params)
+  }
+
+  /**
+   * Emits an event to a connected dApp.
+   *
+   * @param {object} params
+   * @param {string} params.topic
+   * @param {*} params.event
+   * @param {string} params.chainId
+   * @returns {Promise<void>}
+   */
+  async emitSessionEvent (params) {
+    await this._wc.emitSessionEvent(params)
+  }
+
+  /**
+   * Approves a standalone session authentication request.
+   *
+   * @param {object} params
+   * @returns {Promise<{ session: object | undefined }>}
+   */
+  async approveSessionAuthenticate (params) {
+    return this._wc.approveSessionAuthenticate(params)
+  }
+
+  /**
+   * Rejects a standalone session authentication request.
+   *
+   * @param {object} params
+   * @param {number} params.id
+   * @returns {Promise<void>}
+   */
+  async rejectSessionAuthenticate (params) {
+    await this._wc.rejectSessionAuthenticate(params)
+  }
+
+  /**
+   * Formats an authentication message for signing.
+   *
+   * @param {object} params
+   * @param {object} params.request
+   * @param {string} params.iss
+   * @returns {string}
+   */
+  formatAuthMessage (params) {
+    return this._wc.formatAuthMessage(params)
+  }
+
+  /**
    * Disposes and unregisters wallets, erasing any sensitive data from memory.
    * If no blockchains are specified, all registered wallets are disposed.
+   * WalletConnect sessions should be disconnected explicitly via disconnectSession() before calling dispose.
+   *
    * @param {string[]} [blockchains] - The blockchains to dispose. If omitted, all wallets are disposed.
    */
   dispose (blockchains) {
+    this._wc.dispose()
+
     for (const [blockchain, wallet] of this._wallets) {
       if (!blockchains || blockchains.includes(blockchain)) {
         wallet.dispose()

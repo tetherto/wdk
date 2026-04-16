@@ -6,7 +6,32 @@ import WalletManager from '@tetherto/wdk-wallet'
 
 import { BridgeProtocol, LendingProtocol, SwapProtocol } from '@tetherto/wdk-wallet/protocols'
 
-import WdkManager from '../index.js'
+const mockWcHandler = {
+  init: jest.fn(),
+  pair: jest.fn(),
+  approveSession: jest.fn(),
+  rejectSession: jest.fn(),
+  respondRequest: jest.fn(),
+  rejectRequest: jest.fn(),
+  getSessions: jest.fn(),
+  getPendingSessionProposals: jest.fn(),
+  getPendingSessionRequests: jest.fn(),
+  disconnectSession: jest.fn(),
+  updateSession: jest.fn(),
+  extendSession: jest.fn(),
+  emitSessionEvent: jest.fn(),
+  approveSessionAuthenticate: jest.fn(),
+  rejectSessionAuthenticate: jest.fn(),
+  formatAuthMessage: jest.fn(),
+  dispose: jest.fn(),
+  pay: null
+}
+
+jest.unstable_mockModule('../src/walletconnect-handler.js', () => ({
+  default: jest.fn().mockImplementation(() => mockWcHandler)
+}))
+
+const { default: WdkManager } = await import('../index.js')
 
 const SEED_PHRASE = 'cook voyage document eight skate token alien guide drink uncle term abuse'
 
@@ -429,6 +454,7 @@ describe('WdkManager', () => {
   describe('dispose', () => {
     beforeEach(() => {
       disposeMock.mockClear()
+      mockWcHandler.dispose.mockClear()
     })
 
     test('should dispose all wallets when called without arguments', () => {
@@ -438,6 +464,7 @@ describe('WdkManager', () => {
       wdkManager.dispose()
 
       expect(disposeMock).toHaveBeenCalledTimes(2)
+      expect(mockWcHandler.dispose).toHaveBeenCalled()
     })
 
     test('should dispose only the specified wallets', () => {
@@ -476,6 +503,94 @@ describe('WdkManager', () => {
       wdkManager.dispose([])
 
       expect(disposeMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('WalletConnect', () => {
+    const WC_CONFIG = {
+      projectId: 'test-project-id',
+      metadata: { name: 'Test', description: 'Test', url: 'https://test.com', icons: [] }
+    }
+
+    beforeEach(() => {
+      jest.clearAllMocks()
+    })
+
+    test('initWalletConnect should delegate to handler and return wdk instance', async () => {
+      const result = await wdkManager.initWalletConnect(WC_CONFIG)
+
+      expect(mockWcHandler.init).toHaveBeenCalledWith(WC_CONFIG)
+      expect(result).toBe(wdkManager)
+    })
+
+    test('walletkit getter should delegate to handler', () => {
+      mockWcHandler.walletkit = { mock: true }
+      expect(wdkManager.walletkit).toEqual({ mock: true })
+    })
+
+    test('pair should delegate to handler', async () => {
+      await wdkManager.pair('wc:test-uri')
+
+      expect(mockWcHandler.pair).toHaveBeenCalledWith('wc:test-uri')
+    })
+
+    test('approveSession should delegate to handler', async () => {
+      const params = { id: 1, namespaces: {} }
+
+      await wdkManager.approveSession(params)
+
+      expect(mockWcHandler.approveSession).toHaveBeenCalledWith(params)
+    })
+
+    test('rejectSession should delegate to handler', async () => {
+      await wdkManager.rejectSession(1)
+
+      expect(mockWcHandler.rejectSession).toHaveBeenCalledWith(1)
+    })
+
+    test('respondRequest should delegate to handler', async () => {
+      await wdkManager.respondRequest(1, 'topic', { result: '0xsig' })
+
+      expect(mockWcHandler.respondRequest).toHaveBeenCalledWith(1, 'topic', { result: '0xsig' })
+    })
+
+    test('rejectRequest should delegate to handler', async () => {
+      await wdkManager.rejectRequest(1, 'topic', 'error')
+
+      expect(mockWcHandler.rejectRequest).toHaveBeenCalledWith(1, 'topic', 'error')
+    })
+
+    test('getSessions should delegate to handler', () => {
+      const sessions = { 'topic-1': {} }
+      mockWcHandler.getSessions.mockReturnValue(sessions)
+
+      expect(wdkManager.getSessions()).toBe(sessions)
+    })
+
+    test('disconnectSession should delegate to handler', async () => {
+      await wdkManager.disconnectSession('topic-1')
+
+      expect(mockWcHandler.disconnectSession).toHaveBeenCalledWith('topic-1')
+    })
+
+    test('updateSession should delegate to handler', async () => {
+      const params = { topic: 'topic-1', namespaces: {} }
+
+      await wdkManager.updateSession(params)
+
+      expect(mockWcHandler.updateSession).toHaveBeenCalledWith(params)
+    })
+
+    test('emitSessionEvent should delegate to handler', async () => {
+      const params = { topic: 'topic-1', event: {}, chainId: 'eip155:1' }
+
+      await wdkManager.emitSessionEvent(params)
+
+      expect(mockWcHandler.emitSessionEvent).toHaveBeenCalledWith(params)
+    })
+
+    test('pay should return handler pay client', () => {
+      expect(wdkManager.pay).toBe(mockWcHandler.pay)
     })
   })
 })

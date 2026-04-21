@@ -1,35 +1,21 @@
-# WDK Core
+# @tetherto/wdk
 
-**WDK** is a simple tool that enables you to manage the WDK wallet and protocol modules through a single object.
+[![npm version](https://img.shields.io/npm/v/%40tetherto%2Fwdk?style=flat-square)](https://www.npmjs.com/package/@tetherto/wdk)
+[![npm downloads](https://img.shields.io/npm/dw/%40tetherto%2Fwdk?style=flat-square)](https://www.npmjs.com/package/@tetherto/wdk)
+[![license](https://img.shields.io/npm/l/%40tetherto%2Fwdk?style=flat-square)](https://github.com/tetherto/wdk/blob/main/LICENSE)
+[![docs](https://img.shields.io/badge/docs-docs.wdk.tether.io-0A66C2?style=flat-square)](https://docs.wdk.tether.io/sdk/core-module)
 
-### Modules Managed
+**Note**: This package is currently in beta. Please test thoroughly in development environments before using in production.
 
-**Wallet Modules** - Add wallet support for any blockchain:
-- `@tetherto/wdk-wallet-evm` - Ethereum, Polygon, Arbitrum 
-- `@tetherto/wdk-wallet-evm-erc4337` - EVM with no gas fees
-- `@tetherto/wdk-wallet-ton` - TON blockchain
-- `@tetherto/wdk-wallet-ton-gasless` - TON with no gas fees
-- `@tetherto/wdk-wallet-btc` - Bitcoin
-- `@tetherto/wdk-wallet-tron` - TRON blockchain
-- `@tetherto/wdk-wallet-solana` - Solana blockchain
+A flexible manager for orchestrating WDK wallet and protocol modules through a single interface. This package lets you register blockchain-specific wallet managers, derive accounts, and coordinate multi-chain wallet flows from one WDK instance.
 
-**Service Modules** - Add swap, bridge, and lending services:
-- `@tetherto/wdk-protocol-swap-paraswap-evm` - Token swaps on EVM
-- `@tetherto/wdk-protocol-bridge-usdt0-evm` - Bridge tokens between EVM chains
-- `@tetherto/wdk-protocol-bridge-usdt0-ton` - Bridge tokens from TON to other chains
-- `@tetherto/wdk-protocol-lending-aave-evm` - Lending and borrowing on EVM
+## About WDK
 
-**📚 Full module list and docs:** [docs.wallet.tether.io](https://docs.wallet.tether.io)
+This module is part of the [**WDK (Wallet Development Kit)**](https://docs.wdk.tether.io/) project, which empowers developers to build secure, non-custodial wallets with unified blockchain access, stateless architecture, and complete user control.
 
-## Features
+For detailed documentation about the complete WDK ecosystem, visit [docs.wdk.tether.io](https://docs.wdk.tether.io).
 
-- **Module Manager**: Controls and connects all WDK wallet and service modules
-- **Wallet Modules**: Works with `@tetherto/wdk-wallet-evm`, `@tetherto/wdk-wallet-evm-erc-4337`, `@tetherto/wdk-wallet-tron` and other wallet packages
-- **Service Modules**: Manages `@tetherto/wdk-protocol-bridge-usdt0-evm`, `@tetherto/wdk-protocol-bridge-usdt0-ton` and other service packages
-- **One Setup**: Add any WDK module when you need it for any blockchain
-- **Simple Control**: Manage all your wallet and service modules in one place
-
-## How to Install
+## Installation
 
 ```bash
 npm install @tetherto/wdk
@@ -37,117 +23,84 @@ npm install @tetherto/wdk
 
 ## Quick Start
 
-```typescript
+```javascript
 import WDK from '@tetherto/wdk'
-import WalletManagerEvm from '@tetherto/wdk-wallet-evm'
+import WalletManagerSolana from '@tetherto/wdk-wallet-solana'
 import WalletManagerTon from '@tetherto/wdk-wallet-ton'
-import ParaswapProtocolEvm from '@tetherto/wdk-protocol-swap-paraswap-evm'
-import Usdt0ProtocolTon from '@tetherto/wdk-protocol-bridge-usdt0-ton'
+import WalletManagerTron from '@tetherto/wdk-wallet-tron'
 
-// Set up WDK with wallets and services
-const wdk = new WDK(seed) //seed are your twelve word phrase
-  .registerWallet('ethereum', WalletManagerEvm, ethereumWalletConfig)
-  .registerWallet('ton', WalletManagerTon, tonWalletConfig)
-  .registerProtocol('ethereum', 'paraswap', ParaswapProtocolEvm, paraswapProtocolConfig)
-  .registerProtocol('ton', 'usdt0', Usdt0ProtocolTon, usdt0ProtocolConfig)
+const seedPhrase = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
 
-// Get accounts using different ways
-const ethAccount = await wdk.getAccount('ethereum', 3)
-const tonAccount = await wdk.getAccountByPath('ton', "1'/2/3")
+const wdk = new WDK(seedPhrase)
+  .registerWallet('solana', WalletManagerSolana, {
+    rpcUrl: 'https://api.devnet.solana.com',
+    commitment: 'confirmed',
+  })
+  .registerWallet('ton', WalletManagerTon, {
+    tonClient: { url: 'https://testnet.toncenter.com/api/v2/jsonRPC' },
+  })
+  .registerWallet('tron', WalletManagerTron, {
+    provider: 'https://api.shasta.trongrid.io',
+  })
 
-// Send transactions directly
-const { hash: txHash, fee: txFee } = await ethAccount.sendTransaction(tx)
+const account = await wdk.getAccount('solana', 0)
+const address = await account.getAddress()
+console.log('Address:', address)
 
-// Use swap service
-const paraswap = ethAccount.getSwapProtocol('paraswap')
-const { hash: swapHash, fee: swapFee } = await paraswap.swap(swapOptions)
-
-// Use bridge service  
-const usdt0 = tonAccount.getBridgeProtocol('usdt0')
-const { hash: bridgeHash, fee: bridgeFee } = await usdt0.bridge(bridgeOptions)
-
-// These will throw errors:
-// const accountTron = await wdk.getAccount('tron', 5)  // no tron wallet added
-// const badBridge = accountEth.getBridgeProtocol('usdt0')  // no usdt0 for ethereum
-// const badSwap = tonAccount.getSwapProtocol('dedust')  // no dedust for ton
+wdk.dispose()
 ```
 
-## How to Use
+## Key Capabilities
 
-### WDK
+- **Wallet Registration**: Register multiple blockchain wallet managers through one WDK instance
+- **Unified Account Access**: Retrieve accounts by chain, index, or derivation path through a consistent API
+- **Multi-Chain Operations**: Coordinate balances, fee lookups, and transaction flows across registered chains
+- **Protocol Registration Support**: Attach swap, bridge, lending, and fiat protocols to registered blockchains
+- **Middleware Hooks**: Intercept account derivation with custom middleware
+- **Seed Utilities**: Generate and validate BIP-39 seed phrases
+- **Selective Disposal**: Dispose specific registered wallets or clear the full WDK instance
 
-#### Start
-```typescript
-constructor(seed: string | Uint8Array)
-```
+## Compatibility
 
-#### Add Things
-- `registerWallet<W>(blockchain: string, wallet: W, config: WalletConfig): WDK`
-- `registerProtocol<P>(blockchain: string, label: string, protocol: P, config: ProtocolConfig): WDK`
-- `registerMiddleware(blockchain: string, middleware: MiddlewareFunction): WDK`
+- **WDK Wallet Modules** including EVM, Solana, TON, TRON, and Bitcoin integrations
+- **Protocol Modules** registered through the WDK interface
+- **Node.js and ESM-based applications** that coordinate multiple wallet modules in one runtime
 
-#### Get Accounts
-- `getAccount(blockchain: string, index?: number): Promise<IWalletAccountWithProtocols>`
-- `getAccountByPath(blockchain: string, path: string): Promise<IWalletAccountWithProtocols>`
-- `getFeeRates(blockchain: string): Promise<FeeRates>`
+## Documentation
 
-#### Other Tools
-- `dispose(): void`
+| Topic | Description | Link |
+|-------|-------------|------|
+| Overview | Module overview and feature summary | [WDK Core Overview](https://docs.wdk.tether.io/sdk/core-module) |
+| Usage | End-to-end integration walkthrough | [WDK Core Usage](https://docs.wdk.tether.io/sdk/core-module/usage) |
+| Configuration | Wallet registration and manager configuration | [WDK Core Configuration](https://docs.wdk.tether.io/sdk/core-module/configuration) |
+| API Reference | Complete class and type reference | [WDK Core API Reference](https://docs.wdk.tether.io/sdk/core-module/api-reference) |
 
-#### Helper Tools
-- `getRandomSeedPhrase(): string`
-- `isValidSeedPhrase(seedPhrase: string): boolean`
+## Examples
 
-### Account with Services
+| Example | Description |
+|---------|-------------|
+| [Getting Started](https://github.com/tetherto/wdk-examples/blob/main/wdk/getting-started.ts) | Generate a seed phrase, validate it, and create a WDK instance |
+| [Register Wallets](https://github.com/tetherto/wdk-examples/blob/main/wdk/register-wallets.ts) | Register Solana, TON, and TRON wallet managers in one WDK instance |
+| [Manage Accounts](https://github.com/tetherto/wdk-examples/blob/main/wdk/manage-accounts.ts) | Retrieve accounts by index and path and inspect multi-chain balances |
+| [Send Transactions](https://github.com/tetherto/wdk-examples/blob/main/wdk/send-transactions.ts) | Quote and optionally send native transactions across multiple chains |
+| [Middleware](https://github.com/tetherto/wdk-examples/blob/main/wdk/middleware.ts) | Register middleware and inspect account access hooks |
+| [Error Handling](https://github.com/tetherto/wdk-examples/blob/main/wdk/error-handling.ts) | Handle missing registrations and dispose selected wallets safely |
 
-Works with a basic wallet account but adds service management:
+> For detailed walkthroughs, see the [Usage Guide](https://docs.wdk.tether.io/sdk/core-module/usage).
+> See all runnable examples in the [wdk-examples](https://github.com/tetherto/wdk-examples) repository.
 
-- `registerProtocol<P>(label: string, protocol: P, config: ProtocolConfig): IWalletAccountWithProtocols`
-- `getSwapProtocol(label: string): ISwapProtocol` - Gets the swap service with the given name
-- `getBridgeProtocol(label: string): IBridgeProtocol` - Gets the bridge service with the given name  
-- `getLendingProtocol(label: string): ILendingProtocol` - Gets the lending service with the given name
+## Community
 
-## How to Use It
+Join the [WDK Discord](https://discord.gg/arYXDhHB2w) to connect with other developers.
 
-### Add Many Blockchains
-```typescript
-const wdk = new WDK(seed) //seed is your twelve word phrase
-  .registerWallet('ethereum', WalletManagerEvm, ethereumWalletConfig)
-  .registerWallet('arbitrum', WalletManagerEvm, arbitrumWalletConfig)
-  .registerWallet('ton', WalletManagerTon, tonWalletConfig)
-```
+## Support
 
-### Add Services to One Account
-```typescript
-const account = await wdk.getAccount('ethereum', 0)
-account.registerProtocol('paraswap', ParaswapProtocolEvm, paraswapProtocolConfig)
-
-const paraswap = account.getSwapProtocol('paraswap')
-const { hash, fee } = await paraswap.swap(swapOptions)
-
-// This will throw an error - no service with this name:
-// const uniswap = account.getSwapProtocol('uniswap')
-```
-
-### Add Extra Tools to Accounts
-```typescript
-wdk.registerMiddleware('ethereum', async (account) => {
-  console.log('New account:', await account.getAddress())
-})
-```
-
-## License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+For support, please [open an issue](https://github.com/tetherto/wdk/issues) on GitHub or reach out via [email](mailto:wallet-info@tether.io).
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## Support
+## License
 
-For support, please open an issue on the GitHub repository.
-
-## Learn More
-
-For full docs, visit [docs.wallet.tether.io](https://docs.wallet.tether.io)
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

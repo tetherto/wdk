@@ -18,6 +18,9 @@ import WalletManager from '@tetherto/wdk-wallet'
 
 import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol } from '@tetherto/wdk-wallet/protocols'
 
+import PolicyEngine from './policy/policy-engine.js'
+import { PolicyConfigurationError } from './policy/policy-error.js'
+
 /** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
 
 /** @typedef {import('@tetherto/wdk-wallet').FeeRates} FeeRates */
@@ -25,6 +28,24 @@ import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol } from '@te
 /** @typedef {import('./wallet-account-with-protocols.js').IWalletAccountWithProtocols} IWalletAccountWithProtocols */
 
 /** @typedef {<A extends IWalletAccount>(account: A) => Promise<void>} MiddlewareFunction */
+
+/** @typedef {import('./policy/policy-engine.js').Policy} Policy */
+
+/** @typedef {import('./policy/policy-engine.js').PolicyRule} PolicyRule */
+
+/** @typedef {import('./policy/policy-engine.js').PolicyCondition} PolicyCondition */
+
+/** @typedef {import('./policy/policy-engine.js').PolicyContext} PolicyContext */
+
+/** @typedef {import('./policy/policy-engine.js').PolicyAction} PolicyAction */
+
+/** @typedef {import('./policy/policy-engine.js').PolicyScope} PolicyScope */
+
+/** @typedef {import('./policy/policy-engine.js').PolicyOperation} PolicyOperation */
+
+/** @typedef {import('./policy/policy-engine.js').SimulationResult} SimulationResult */
+
+/** @typedef {import('./policy/policy-engine.js').RegisterPolicyOptions} RegisterPolicyOptions */
 
 export default class WDK {
   /**
@@ -49,6 +70,9 @@ export default class WDK {
 
     /** @private */
     this._middlewares = Object.create(null)
+
+    /** @private */
+    this._policyEngine = new PolicyEngine()
   }
 
   /**
@@ -146,6 +170,77 @@ export default class WDK {
   }
 
   /**
+   * Registers one or more transaction policies that will be evaluated before
+   * any wrapped account or protocol method is allowed to execute.
+   *
+   * The first argument may be a chain name (string), a list of chain names
+   * (string[]), or omitted entirely. When omitted, the policies are project-
+   * scoped only — applicable across every registered wallet. When provided,
+   * wallet- and account-scope policies are bound to those specific chains.
+   *
+   * Multiple `registerPolicy` calls stack. If a policy with the same id is
+   * registered twice into the same chain binding, the second call replaces
+   * the first.
+   *
+   * @overload
+   * @param {Policy | Policy[]} policies
+   * @param {RegisterPolicyOptions} [options]
+   * @returns {WDK}
+   */
+  /**
+   * @overload
+   * @param {string | string[]} chain
+   * @param {Policy | Policy[]} policies
+   * @param {RegisterPolicyOptions} [options]
+   * @returns {WDK}
+   */
+  /**
+   * @param {string | string[] | Policy | Policy[]} chainOrPolicies
+   * @param {Policy | Policy[] | RegisterPolicyOptions} [policiesOrOptions]
+   * @param {RegisterPolicyOptions} [maybeOptions]
+   * @returns {WDK}
+   */
+  registerPolicy (chainOrPolicies, policiesOrOptions, maybeOptions) {
+    let chain
+    let policies
+    let options
+
+    if (typeof chainOrPolicies === 'string' || Array.isArray(chainOrPolicies)) {
+      const isPolicyArray = Array.isArray(chainOrPolicies) &&
+        chainOrPolicies.length > 0 &&
+        chainOrPolicies.every((entry) => typeof entry === 'object' && entry !== null && !Array.isArray(entry))
+
+      if (isPolicyArray) {
+        chain = undefined
+        policies = chainOrPolicies
+        options = policiesOrOptions
+      } else {
+        chain = chainOrPolicies
+        policies = policiesOrOptions
+        options = maybeOptions
+      }
+    } else {
+      chain = undefined
+      policies = chainOrPolicies
+      options = policiesOrOptions
+    }
+
+    if (Array.isArray(chain)) {
+      for (const c of chain) {
+        if (typeof c === 'string' && c.length > 0 && !this._wallets.has(c)) {
+          throw new PolicyConfigurationError(`registerPolicy: no wallet registered for blockchain '${c}'.`)
+        }
+      }
+    } else if (typeof chain === 'string' && !this._wallets.has(chain)) {
+      throw new PolicyConfigurationError(`registerPolicy: no wallet registered for blockchain '${chain}'.`)
+    }
+
+    this._policyEngine.register(chain, policies, options)
+
+    return this
+  }
+
+  /**
    * Returns the wallet account for a specific blockchain and index (see BIP-44).
    *
    * @param {string} blockchain - The name of the blockchain (e.g., "ethereum").
@@ -165,6 +260,8 @@ export default class WDK {
     await this._runMiddlewares(account, { blockchain })
 
     this._registerProtocols(account, { blockchain })
+
+    await this._applyPolicies(account, { blockchain })
 
     return account
   }
@@ -189,6 +286,8 @@ export default class WDK {
     await this._runMiddlewares(account, { blockchain })
 
     this._registerProtocols(account, { blockchain })
+
+    await this._applyPolicies(account, { blockchain })
 
     return account
   }
@@ -222,8 +321,18 @@ export default class WDK {
       if (!blockchains || blockchains.includes(blockchain)) {
         wallet.dispose()
         this._wallets.delete(blockchain)
+        this._policyEngine.disposeChain(blockchain)
       }
     }
+
+    if (!blockchains) {
+      this._policyEngine.disposeAll()
+    }
+  }
+
+  /** @private */
+  async _applyPolicies (account, { blockchain }) {
+    await this._policyEngine.applyPoliciesTo(account, { blockchain, path: account.path })
   }
 
   /** @private */

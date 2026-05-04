@@ -1,5 +1,17 @@
 export { default } from "./src/wdk-manager.js";
 export type IWalletAccount = import("./src/wdk-manager.js").IWalletAccount;
+export type IWalletAccountReadOnly = import("@tetherto/wdk-wallet").IWalletAccountReadOnly;
 export type FeeRates = import("./src/wdk-manager.js").FeeRates;
 export type MiddlewareFunction = import("./src/wdk-manager.js").MiddlewareFunction;
 export type IWalletAccountWithProtocols = import("./src/wallet-account-with-protocols.js").IWalletAccountWithProtocols;
+export type Policy = import("./src/policy/index.js").Policy;
+export type PolicyRule = import("./src/policy/index.js").PolicyRule;
+export type PolicyCondition = import("./src/policy/index.js").PolicyCondition;
+export type PolicyContext = import("./src/policy/index.js").PolicyContext;
+export type PolicyAction = import("./src/policy/index.js").PolicyAction;
+export type PolicyScope = import("./src/policy/index.js").PolicyScope;
+export type PolicyOperation = import("./src/policy/index.js").PolicyOperation;
+export type SimulationResult = import("./src/policy/index.js").SimulationResult;
+export type SimulationTraceEntry = import("./src/policy/index.js").SimulationTraceEntry;
+export type RegisterPolicyOptions = import("./src/policy/index.js").RegisterPolicyOptions;
+export { PolicyViolationError, PolicyConfigurationError } from "./src/policy/index.js";

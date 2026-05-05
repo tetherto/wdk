@@ -25,10 +25,3 @@ export const PROTOCOL_METHODS: Readonly<{
     lending: string[];
     fiat: string[];
 }>;
-/**
- * Symbol used to mark an account as currently inside a wrapped call so that
- * nested wrapped calls (e.g. approve → sendTransaction) skip re-evaluation.
- *
- * @internal
- */
-export const POLICY_CTX: unique symbol;

@@ -44,22 +44,27 @@ export default class PolicyRegistry {
    * - chains === undefined → project-scope only (policy must be project-scope).
    * - chains is array      → bind under each chain into the matching bucket.
    *
+   * Stores a defensive shallow clone of the policy so callers cannot mutate
+   * engine state by editing the original object after registration.
+   *
    * @param {object} policy
    * @param {string[] | undefined} chains
    */
   add (policy, chains) {
-    if (policy.scope === 'project') {
-      replaceById(this._project, policy)
+    const cloned = clonePolicy(policy)
+
+    if (cloned.scope === 'project') {
+      replaceById(this._project, cloned)
 
       return
     }
 
-    const target = policy.scope === 'wallet' ? this._walletByChain : this._accountByChain
+    const target = cloned.scope === 'wallet' ? this._walletByChain : this._accountByChain
 
     for (const chain of chains) {
       target[chain] ??= []
 
-      replaceById(target[chain], policy)
+      replaceById(target[chain], cloned)
     }
   }
 
@@ -132,5 +137,17 @@ function replaceById (list, policy) {
     list.push(policy)
   } else {
     list[i] = policy
+  }
+}
+
+function clonePolicy (policy) {
+  return {
+    ...policy,
+    accounts: policy.accounts ? [...policy.accounts] : undefined,
+    rules: policy.rules.map((rule) => ({
+      ...rule,
+      operation: Array.isArray(rule.operation) ? [...rule.operation] : rule.operation,
+      conditions: [...rule.conditions]
+    }))
   }
 }

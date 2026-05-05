@@ -19,6 +19,16 @@
 /**
  * Builds the immutable context object passed to every condition function.
  *
+ * Each cloneable argument is passed through structuredClone so condition
+ * functions see a snapshot taken at evaluation time. This prevents
+ * time-of-check / time-of-use mutation: a caller mutating the original
+ * tx object after the wrapper builds the context (e.g., concurrent
+ * middleware on a shared request body) cannot change what the conditions
+ * already evaluated. The original arguments still flow through to the
+ * underlying method untouched. Arguments that aren't structured-cloneable
+ * (functions, class instances with non-cloneable internals) fall back to
+ * their raw value.
+ *
  * @internal
  * @param {object} input
  * @param {string} input.operation - The wrapped operation name (e.g. 'sendTransaction').
@@ -28,7 +38,7 @@
  * @returns {object} A frozen context object: { operation, chain, account, params, args }.
  */
 export function buildContext ({ operation, chain, account, args }) {
-  const safeArgs = Object.freeze(Array.from(args))
+  const safeArgs = Object.freeze(Array.from(args, snapshot))
 
   return Object.freeze({
     operation,
@@ -37,4 +47,14 @@ export function buildContext ({ operation, chain, account, args }) {
     params: safeArgs[0],
     args: safeArgs
   })
+}
+
+function snapshot (value) {
+  if (value === null || typeof value !== 'object') return value
+
+  try {
+    return structuredClone(value)
+  } catch {
+    return value
+  }
 }

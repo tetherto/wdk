@@ -473,8 +473,36 @@ describe('WdkManager — policy engine', () => {
       expect(err.policyId).toBe('block-eth')
       expect(err.ruleName).toBe('deny-all')
       expect(err.reason).toBe('deny-all')
-      expect(err.message).toBe('Policy violation: block-eth/deny-all: deny-all')
+      expect(err.message).toBe('Policy violation: block-eth/deny-all')
       expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('user-supplied rule.reason propagates into PolicyViolationError.reason and message', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdkManager
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'platform-denylist',
+          name: 'Platform Sanctioned Addresses',
+          scope: 'project',
+          rules: [{
+            name: 'block-bad-recipient',
+            reason: 'recipient is on the sanctioned address list',
+            operation: 'sendTransaction',
+            action: 'DENY',
+            conditions: [() => true]
+          }]
+        })
+
+      const account = await wdkManager.getAccount('ethereum', 0)
+      const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(err.name).toBe('PolicyViolationError')
+      expect(err.policyId).toBe('platform-denylist')
+      expect(err.ruleName).toBe('block-bad-recipient')
+      expect(err.reason).toBe('recipient is on the sanctioned address list')
+      expect(err.message).toBe('Policy violation: platform-denylist/block-bad-recipient: recipient is on the sanctioned address list')
     })
 
     test('reason is "governed-but-unmatched" when an operation has policies but no rule matches', async () => {
@@ -709,7 +737,7 @@ describe('WdkManager — policy engine', () => {
       expect(result.matched_rule).toBeNull()
       expect(result.reason).toBe('governed-but-unmatched')
       expect(result.trace).toHaveLength(1)
-      expect(result.trace[0]).toEqual({ scope: 'project', policyId: 'boom', ruleName: 'r', matched: false, error: 'condition crashed' })
+      expect(result.trace[0]).toEqual({ scope: 'project', policy_id: 'boom', rule_name: 'r', matched: false, error: 'condition crashed' })
     })
   })
 
@@ -942,7 +970,7 @@ describe('WdkManager — policy engine', () => {
       expect(result.matched_rule).toBe('allow-small')
       expect(result.reason).toBe('matched')
       expect(result.trace).toHaveLength(1)
-      expect(result.trace[0]).toEqual({ scope: 'project', policyId: 'cap', ruleName: 'allow-small', matched: true })
+      expect(result.trace[0]).toEqual({ scope: 'project', policy_id: 'cap', rule_name: 'allow-small', matched: true })
       expect(sendTransactionMock).not.toHaveBeenCalled()
     })
 
@@ -1017,6 +1045,192 @@ describe('WdkManager — policy engine', () => {
 
       expect(condition).toHaveBeenCalledTimes(1)
       expect(sendTransactionMock).toHaveBeenCalledTimes(1)
+    })
+
+    test('concurrent calls on the same account each evaluate policies independently', async () => {
+      // Make the underlying method slow so call B starts while call A is still
+      // awaiting `original()`. With a per-account flag, B would see the in-flight
+      // marker set by A and bypass evaluation. With AsyncLocalStorage scoping,
+      // each call's "in policy" marker is confined to its own async chain.
+      sendTransactionMock.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        return { hash: DUMMY_TX_HASH }
+      })
+
+      const condition = jest.fn().mockReturnValue(true)
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdkManager
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'concurrency',
+          name: 'concurrency',
+          scope: 'project',
+          rules: [{ name: 'r', operation: 'sendTransaction', action: 'ALLOW', conditions: [condition] }]
+        })
+
+      const account = await wdkManager.getAccount('ethereum', 0)
+
+      const [resultA, resultB] = await Promise.all([
+        account.sendTransaction({ to: RECIPIENT, value: 1n }),
+        account.sendTransaction({ to: RECIPIENT, value: 2n })
+      ])
+
+      expect(resultA.hash).toBe(DUMMY_TX_HASH)
+      expect(resultB.hash).toBe(DUMMY_TX_HASH)
+      expect(condition).toHaveBeenCalledTimes(2)
+      expect(sendTransactionMock).toHaveBeenCalledTimes(2)
+    })
+
+    test('concurrent calls under a DENY policy both throw PolicyViolationError', async () => {
+      sendTransactionMock.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        return { hash: DUMMY_TX_HASH }
+      })
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdkManager
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'concurrency-deny',
+          name: 'concurrency-deny',
+          scope: 'project',
+          rules: [{ name: 'deny', operation: 'sendTransaction', action: 'DENY', conditions: [() => true] }]
+        })
+
+      const account = await wdkManager.getAccount('ethereum', 0)
+
+      const [errA, errB] = await Promise.all([
+        catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n })),
+        catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 2n }))
+      ])
+
+      expect(errA.name).toBe('PolicyViolationError')
+      expect(errA.policyId).toBe('concurrency-deny')
+      expect(errB.name).toBe('PolicyViolationError')
+      expect(errB.policyId).toBe('concurrency-deny')
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Context immutability (TOCTOU protection)
+  // -------------------------------------------------------------------------
+
+  describe('context immutability', () => {
+    test('mutating the params object after the call starts does not change what conditions saw', async () => {
+      let observedTo
+
+      // Slow async condition gives the user time to mutate the original object.
+      const condition = jest.fn(async ({ params }) => {
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        observedTo = params.to
+        return true
+      })
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdkManager
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'capture-to',
+          name: 'capture-to',
+          scope: 'project',
+          rules: [{ name: 'r', operation: 'sendTransaction', action: 'ALLOW', conditions: [condition] }]
+        })
+
+      const account = await wdkManager.getAccount('ethereum', 0)
+
+      const tx = { to: RECIPIENT, value: 1n }
+      const callPromise = account.sendTransaction(tx)
+      tx.to = SANCTIONED // user mutates after starting the call
+
+      await callPromise
+
+      expect(observedTo).toBe(RECIPIENT)
+    })
+
+    test('a condition function cannot mutate its way into the underlying call', async () => {
+      const condition = jest.fn(({ params }) => {
+        params.to = SANCTIONED // mutation should not propagate
+        return true
+      })
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdkManager
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'mutate-attempt',
+          name: 'mutate-attempt',
+          scope: 'project',
+          rules: [{ name: 'r', operation: 'sendTransaction', action: 'ALLOW', conditions: [condition] }]
+        })
+
+      const account = await wdkManager.getAccount('ethereum', 0)
+
+      const tx = { to: RECIPIENT, value: 1n }
+      await account.sendTransaction(tx)
+
+      expect(sendTransactionMock).toHaveBeenCalledWith({ to: RECIPIENT, value: 1n })
+      expect(tx.to).toBe(RECIPIENT) // caller's object also unchanged
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Defensive policy storage
+  // -------------------------------------------------------------------------
+
+  describe('registry isolation', () => {
+    test('mutating a policy after registration does not affect engine state', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      const policy = {
+        id: 'mutable',
+        name: 'mutable',
+        scope: 'project',
+        rules: [{ name: 'deny', operation: 'sendTransaction', action: 'DENY', conditions: [() => true] }]
+      }
+
+      wdkManager
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(policy)
+
+      // Mutate the original after registration; engine should not see this.
+      policy.rules[0].action = 'ALLOW'
+      policy.rules[0].conditions = []
+
+      const account = await wdkManager.getAccount('ethereum', 0)
+      const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(err.name).toBe('PolicyViolationError')
+      expect(err.policyId).toBe('mutable')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Integration diagnostics
+  // -------------------------------------------------------------------------
+
+  describe('integration diagnostics', () => {
+    test('a wallet whose account lacks toReadOnlyAccount() yields a clear PolicyConfigurationError', async () => {
+      getAccountMock.mockResolvedValue({
+        path: PATH_DEFAULT,
+        index: 0,
+        sendTransaction: sendTransactionMock
+        // no toReadOnlyAccount provided
+      })
+
+      wdkManager
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(projectDenyAll('p'))
+
+      const err = await catchAsync(() => wdkManager.getAccount('ethereum', 0))
+
+      expect(err.name).toBe('PolicyConfigurationError')
+      expect(err.message).toBe("policy engine requires IWalletAccount.toReadOnlyAccount() but the wallet for blockchain 'ethereum' does not provide it.")
     })
   })
 

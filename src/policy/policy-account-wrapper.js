@@ -14,9 +14,11 @@
 
 'use strict'
 
-import { POLICY_CTX, PROTOCOL_METHODS } from './constants.js'
+import { AsyncLocalStorage } from 'node:async_hooks'
+
+import { PROTOCOL_METHODS } from './constants.js'
 import { buildContext } from './policy-context.js'
-import PolicyViolationError from './policy-error.js'
+import PolicyViolationError, { PolicyConfigurationError } from './policy-error.js'
 
 /** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
 
@@ -26,6 +28,15 @@ const PROTOCOL_GETTERS = [
   ['getLendingProtocol', 'lending'],
   ['getFiatProtocol', 'fiat']
 ]
+
+// Tracks "we are currently inside a policy-evaluated call" along the async
+// execution chain. Using AsyncLocalStorage instead of an account-level flag
+// is essential for correctness: the per-account flag breaks under concurrent
+// external calls on the same account (call B sees A's in-flight flag and
+// bypasses evaluation). AsyncLocalStorage scopes the marker to the async
+// chain that set it, so concurrent calls evaluate independently while
+// nested calls within one chain still skip re-evaluation correctly.
+const policyContextStore = new AsyncLocalStorage()
 
 /**
  * Wraps every write method on the given account that's referenced by a
@@ -47,9 +58,13 @@ export async function applyPoliciesToAccount (account, { blockchain, path, engin
 
   if (relevantOps.size === 0) return
 
-  const readOnlyAccount = await account.toReadOnlyAccount()
+  if (typeof account.toReadOnlyAccount !== 'function') {
+    throw new PolicyConfigurationError(
+      `policy engine requires IWalletAccount.toReadOnlyAccount() but the wallet for blockchain '${blockchain}' does not provide it.`
+    )
+  }
 
-  account[POLICY_CTX] = false
+  const readOnlyAccount = await account.toReadOnlyAccount()
 
   const wrappedNames = []
 
@@ -112,7 +127,7 @@ export async function applyPoliciesToAccount (account, { blockchain, path, engin
 
 function makeWrappedMethod ({ name, original, account, readOnlyAccount, blockchain, engine }) {
   return async function (...args) {
-    if (account[POLICY_CTX]) {
+    if (policyContextStore.getStore()?.inPolicy) {
       return original(...args)
     }
 
@@ -133,13 +148,7 @@ function makeWrappedMethod ({ name, original, account, readOnlyAccount, blockcha
       )
     }
 
-    account[POLICY_CTX] = true
-
-    try {
-      return await original(...args)
-    } finally {
-      account[POLICY_CTX] = false
-    }
+    return policyContextStore.run({ inPolicy: true }, () => original(...args))
   }
 }
 

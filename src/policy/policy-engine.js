@@ -58,9 +58,10 @@ import {
 /**
  * @typedef {object} PolicyRule
  * @property {string} name
+ * @property {string} [reason] - Optional human-readable explanation. When set on a DENY rule that matches, propagates to PolicyViolationError.reason and to the matching simulate-result. Defaults to the rule's name.
  * @property {PolicyOperation | PolicyOperation[]} operation
  * @property {PolicyAction} action
- * @property {boolean} [override_broader_scope]
+ * @property {boolean} [override_broader_scope] - When true on an account-scope ALLOW rule that matches, the rule's verdict short-circuits both wallet- and project-scope evaluation. Account-scope rules are evaluated in registration order; the first matching override-flag rule wins. Only valid on account-scope ALLOW rules.
  * @property {PolicyCondition[]} conditions
  * @property {object} [state]                                       Reserved for Phase 2; ignored at runtime.
  * @property {(c: PolicyContext) => void | Promise<void>} [onSuccess]   Reserved for Phase 2; ignored at runtime.
@@ -71,7 +72,7 @@ import {
  * @property {string} id
  * @property {string} name
  * @property {PolicyScope} scope
- * @property {string[]} [accounts] - Required when scope is 'account'.
+ * @property {string[]} [accounts] - Derivation paths the policy applies to (required when scope is 'account'). Exact-string matching only in Phase 1; no prefix or wildcard matching.
  * @property {PolicyRule[]} rules
  */
 
@@ -83,8 +84,8 @@ import {
 /**
  * @typedef {object} SimulationTraceEntry
  * @property {PolicyScope} scope
- * @property {string} policyId
- * @property {string} ruleName
+ * @property {string} policy_id
+ * @property {string} rule_name
  * @property {boolean} matched
  * @property {string} [error]
  */

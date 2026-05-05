@@ -26,7 +26,9 @@ export default class PolicyViolationError extends Error {
    * @param {string} reason - A human-readable explanation.
    */
   constructor (policyId, ruleName, reason) {
-    super(`Policy violation: ${policyId}/${ruleName}: ${reason}`)
+    const suffix = reason && reason !== ruleName ? `: ${reason}` : ''
+
+    super(`Policy violation: ${policyId}/${ruleName}${suffix}`)
 
     this.name = 'PolicyViolationError'
 

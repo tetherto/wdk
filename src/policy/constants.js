@@ -64,11 +64,3 @@ export const PROTOCOL_METHODS = Object.freeze({
   lending: ['supply', 'withdraw', 'borrow', 'repay'],
   fiat: ['buy', 'sell']
 })
-
-/**
- * Symbol used to mark an account as currently inside a wrapped call so that
- * nested wrapped calls (e.g. approve → sendTransaction) skip re-evaluation.
- *
- * @internal
- */
-export const POLICY_CTX = Symbol('wdk.policy.inContext')

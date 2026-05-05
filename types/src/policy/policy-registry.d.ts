@@ -23,6 +23,9 @@ export default class PolicyRegistry {
      * - chains === undefined → project-scope only (policy must be project-scope).
      * - chains is array      → bind under each chain into the matching bucket.
      *
+     * Stores a defensive shallow clone of the policy so callers cannot mutate
+     * engine state by editing the original object after registration.
+     *
      * @param {object} policy
      * @param {string[] | undefined} chains
      */

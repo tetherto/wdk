@@ -89,8 +89,8 @@ async function evalGroup (policies, context, trace, scope, { allowOverride }) {
 
       trace.push({
         scope,
-        policyId: policy.id,
-        ruleName: rule.name,
+        policy_id: policy.id,
+        rule_name: rule.name,
         matched,
         ...(error !== undefined ? { error } : {})
       })
@@ -98,7 +98,7 @@ async function evalGroup (policies, context, trace, scope, { allowOverride }) {
       if (!matched) continue
 
       if (rule.action === 'DENY') {
-        return { kind: 'DENY', policyId: policy.id, ruleName: rule.name, reason: rule.name }
+        return { kind: 'DENY', policyId: policy.id, ruleName: rule.name, reason: rule.reason ?? rule.name }
       }
 
       if (allowOverride && rule.override_broader_scope === true) {

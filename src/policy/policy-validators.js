@@ -156,6 +156,10 @@ function validateRule (rule, policy) {
     }
   }
 
+  if (rule.reason !== undefined && !isNonEmptyString(rule.reason)) {
+    throw new PolicyConfigurationError(`Rule '${rule.name}' in policy '${policy.id}': 'reason' must be a non-empty string.`)
+  }
+
   if (!Array.isArray(rule.conditions)) {
     throw new PolicyConfigurationError(`Rule '${rule.name}' in policy '${policy.id}': 'conditions' must be an array.`)
   }

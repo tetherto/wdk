@@ -57,8 +57,48 @@ wdk.dispose()
 - **Multi-Chain Operations**: Coordinate balances, fee lookups, and transaction flows across registered chains
 - **Protocol Registration Support**: Attach swap, bridge, lending, and fiat protocols to registered blockchains
 - **Middleware Hooks**: Intercept account derivation with custom middleware
+- **Transaction Policies**: Local policy engine that intercepts write-facing operations and enforces user-defined ALLOW/DENY rules across project, wallet, and account scopes — with simulation, nested-call handling, and structured `PolicyViolationError`s
 - **Seed Utilities**: Generate and validate BIP-39 seed phrases
 - **Selective Disposal**: Dispose specific registered wallets or clear the full WDK instance
+
+## Transaction Policies
+
+Register policies on a `WDK` instance to gate write-facing operations on every wallet account. Each registered rule can `ALLOW` or `DENY` an attempted operation based on a condition function; matching `DENY`s throw a `PolicyViolationError` before the underlying method runs.
+
+```javascript
+import WDK, { PolicyViolationError } from '@tetherto/wdk'
+import WalletManagerEvm from '@tetherto/wdk-wallet-evm'
+
+const wdk = new WDK(seedPhrase)
+  .registerWallet('ethereum', WalletManagerEvm, { provider: '...' })
+  .registerPolicy({
+    id: 'value-cap',
+    name: 'Cap value at 1 ETH',
+    scope: 'project',
+    rules: [{
+      name: 'allow-under-1-eth',
+      operation: 'sendTransaction',
+      action: 'ALLOW',
+      conditions: [({ params }) => BigInt(params.value) <= 10n ** 18n]
+    }]
+  })
+
+const account = await wdk.getAccount('ethereum', 0)
+
+try {
+  await account.sendTransaction({ to: '0x…', value: 5n * 10n ** 18n })
+} catch (err) {
+  if (err instanceof PolicyViolationError) {
+    console.log(err.policyId, err.ruleName, err.reason)
+  }
+}
+
+// Run the same evaluation without executing the transaction.
+const result = await account.simulate.sendTransaction({ to: '0x…', value: 1n })
+// → { decision: 'ALLOW' | 'DENY', policy_id, matched_rule, reason, trace }
+```
+
+Policies have three scopes — `project` (all wallets), `wallet` (one chain), and `account` (specific derivation paths) — evaluated narrowest-first with `DENY` winning across scopes. Account-scope `ALLOW` rules can opt into `override_broader_scope: true` to short-circuit broader policies for explicit exceptions (e.g., treasury wallets). Conditions can be sync or async and may carry user-owned state via closures. Templates (`@tetherto/wdk-policy-templates`) and a portal UI for editing policies are coming in later phases.
 
 ## Compatibility
 

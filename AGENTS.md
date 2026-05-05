@@ -44,6 +44,13 @@ Source code must be strictly typed using JSDoc comments to support the `build:ty
 
 ## Repository Specifics
 - **Domain:** Core Orchestrator.
-- **Role:** Central entry point for the WDK. Manages lifecycle of multiple wallet instances and protocols.
-- **Key Pattern:** Dependency Injection (registerWallet, registerProtocol).
-- **Architecture:** `WdkManager` class manages a collection of `WalletManager` instances.
+- **Role:** Central entry point for the WDK. Manages lifecycle of multiple wallet instances, protocols, and transaction policies.
+- **Key Pattern:** Dependency Injection (registerWallet, registerProtocol, registerPolicy).
+- **Architecture:** `WDK` class manages a collection of `WalletManager` instances and a `PolicyEngine` that intercepts write-facing operations on every account returned from `getAccount` / `getAccountByPath`.
+
+## Policy Engine
+- Source lives under `src/policy/`. Public surface is the `PolicyViolationError` and `PolicyConfigurationError` classes plus the `Policy*` / `SimulationResult` typedefs re-exported from `index.js`. Everything else under `src/policy/` is internal.
+- The engine wraps account write methods and protocol getters at `getAccount` time. Wrapping is dynamic — only methods named in registered rules are wrapped, and only when at least one policy applies.
+- The "in policy context" marker uses `AsyncLocalStorage` (per-async-chain) so concurrent calls on the same account each evaluate independently, while nested calls within one chain still skip re-evaluation.
+- Conditions are user-supplied functions in Phase 1. The engine accepts `state` and `onSuccess` rule fields for Phase 2 (engine-managed state + post-execution hooks) but ignores them at runtime.
+- Tests live in `tests/wdk-manager-policy.test.js` and exercise the engine exclusively through the public WDK API.

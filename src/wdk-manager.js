@@ -26,14 +26,53 @@ import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol } from '@te
 
 /** @typedef {<A extends IWalletAccount>(account: A) => Promise<void>} MiddlewareFunction */
 
+/**
+ * @typedef {Object} TraceEvent
+ * @property {string} name - The event name (e.g. "wdk.account.resolved").
+ * @property {number} startedAt - Epoch milliseconds when the operation started.
+ * @property {number} [durationMs] - Elapsed time in milliseconds (omitted for fire-and-forget events).
+ * @property {Error} [error] - The error thrown by the operation, if any.
+ * @property {string} [blockchain] - The blockchain the event relates to, if any.
+ * @property {Record<string, unknown>} [meta] - Additional event-specific metadata.
+ */
+
+/** @typedef {(event: TraceEvent) => void} TracerFn */
+
+/**
+ * @typedef {Object} WDKConfig
+ * @property {TracerFn} [tracer] - Optional observability hook. Called synchronously for every orchestrator operation with a structured event. Defaults to a no-op.
+ */
+
+/**
+ * Canonical event names emitted by the WDK orchestrator. Use this enum instead
+ * of magic strings when filtering or routing in a {@link TracerFn}.
+ */
+export const TraceEvents = Object.freeze({
+  Created: 'wdk.created',
+  WalletRegistered: 'wdk.wallet.registered',
+  WalletRegisterFailed: 'wdk.wallet.register_failed',
+  ProtocolRegistered: 'wdk.protocol.registered',
+  MiddlewareRegistered: 'wdk.middleware.registered',
+  MiddlewareExecuted: 'wdk.middleware.executed',
+  MiddlewareFailed: 'wdk.middleware.failed',
+  AccountResolved: 'wdk.account.resolved',
+  AccountFailed: 'wdk.account.failed',
+  FeeRatesResolved: 'wdk.fee_rates.resolved',
+  FeeRatesFailed: 'wdk.fee_rates.failed',
+  Disposed: 'wdk.disposed'
+})
+
+const NOOP_TRACER = () => {}
+
 export default class WDK {
   /**
    * Creates a new wallet development kit instance.
    *
    * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase.
+   * @param {WDKConfig} [config] - Optional WDK configuration.
    * @throws {Error} If the seed is not valid.
    */
-  constructor (seed) {
+  constructor (seed, config = {}) {
     if (!WDK.isValidSeed(seed)) {
       throw new Error('Invalid seed.')
     }
@@ -49,6 +88,11 @@ export default class WDK {
 
     /** @private */
     this._middlewares = Object.create(null)
+
+    /** @private */
+    this._tracer = typeof config.tracer === 'function' ? config.tracer : NOOP_TRACER
+
+    this._trace(TraceEvents.Created, { startedAt: Date.now() })
   }
 
   /**
@@ -85,9 +129,18 @@ export default class WDK {
    * @returns {WDK} The wdk instance.
    */
   registerWallet (blockchain, WalletManager, config) {
-    const wallet = new WalletManager(this._seed, config)
+    const startedAt = Date.now()
 
-    this._wallets.set(blockchain, wallet)
+    try {
+      const wallet = new WalletManager(this._seed, config)
+
+      this._wallets.set(blockchain, wallet)
+    } catch (error) {
+      this._trace(TraceEvents.WalletRegisterFailed, { startedAt, durationMs: Date.now() - startedAt, blockchain, error })
+      throw error
+    }
+
+    this._trace(TraceEvents.WalletRegistered, { startedAt, durationMs: Date.now() - startedAt, blockchain })
 
     return this
   }
@@ -107,23 +160,32 @@ export default class WDK {
    * @returns {WDK} The wdk instance.
    */
   registerProtocol (blockchain, label, Protocol, config) {
+    const startedAt = Date.now()
+    let kind
+
     if (Protocol.prototype instanceof SwapProtocol) {
       this._protocols.swap[blockchain] ??= Object.create(null)
 
       this._protocols.swap[blockchain][label] = { Protocol, config }
+      kind = 'swap'
     } else if (Protocol.prototype instanceof BridgeProtocol) {
       this._protocols.bridge[blockchain] ??= Object.create(null)
 
       this._protocols.bridge[blockchain][label] = { Protocol, config }
+      kind = 'bridge'
     } else if (Protocol.prototype instanceof LendingProtocol) {
       this._protocols.lending[blockchain] ??= Object.create(null)
 
       this._protocols.lending[blockchain][label] = { Protocol, config }
+      kind = 'lending'
     } else if (Protocol.prototype instanceof FiatProtocol) {
       this._protocols.fiat[blockchain] ??= Object.create(null)
 
       this._protocols.fiat[blockchain][label] = { Protocol, config }
+      kind = 'fiat'
     }
+
+    this._trace(TraceEvents.ProtocolRegistered, { startedAt, durationMs: Date.now() - startedAt, blockchain, meta: { kind, label } })
 
     return this
   }
@@ -142,6 +204,8 @@ export default class WDK {
 
     this._middlewares[blockchain].push(middleware)
 
+    this._trace(TraceEvents.MiddlewareRegistered, { startedAt: Date.now(), blockchain })
+
     return this
   }
 
@@ -154,19 +218,28 @@ export default class WDK {
    * @throws {Error} If no wallet has been registered for the given blockchain.
    */
   async getAccount (blockchain, index = 0) {
-    if (!this._wallets.has(blockchain)) {
-      throw new Error(`No wallet registered for blockchain: ${blockchain}.`)
+    const startedAt = Date.now()
+
+    try {
+      if (!this._wallets.has(blockchain)) {
+        throw new Error(`No wallet registered for blockchain: ${blockchain}.`)
+      }
+
+      const wallet = this._wallets.get(blockchain)
+
+      const account = await wallet.getAccount(index)
+
+      await this._runMiddlewares(account, { blockchain })
+
+      this._registerProtocols(account, { blockchain })
+
+      this._trace(TraceEvents.AccountResolved, { startedAt, durationMs: Date.now() - startedAt, blockchain, meta: { index } })
+
+      return account
+    } catch (error) {
+      this._trace(TraceEvents.AccountFailed, { startedAt, durationMs: Date.now() - startedAt, blockchain, error, meta: { index } })
+      throw error
     }
-
-    const wallet = this._wallets.get(blockchain)
-
-    const account = await wallet.getAccount(index)
-
-    await this._runMiddlewares(account, { blockchain })
-
-    this._registerProtocols(account, { blockchain })
-
-    return account
   }
 
   /**
@@ -178,19 +251,28 @@ export default class WDK {
    * @throws {Error} If no wallet has been registered for the given blockchain.
    */
   async getAccountByPath (blockchain, path) {
-    if (!this._wallets.has(blockchain)) {
-      throw new Error(`No wallet registered for blockchain: ${blockchain}.`)
+    const startedAt = Date.now()
+
+    try {
+      if (!this._wallets.has(blockchain)) {
+        throw new Error(`No wallet registered for blockchain: ${blockchain}.`)
+      }
+
+      const wallet = this._wallets.get(blockchain)
+
+      const account = await wallet.getAccountByPath(path)
+
+      await this._runMiddlewares(account, { blockchain })
+
+      this._registerProtocols(account, { blockchain })
+
+      this._trace(TraceEvents.AccountResolved, { startedAt, durationMs: Date.now() - startedAt, blockchain, meta: { path } })
+
+      return account
+    } catch (error) {
+      this._trace(TraceEvents.AccountFailed, { startedAt, durationMs: Date.now() - startedAt, blockchain, error, meta: { path } })
+      throw error
     }
-
-    const wallet = this._wallets.get(blockchain)
-
-    const account = await wallet.getAccountByPath(path)
-
-    await this._runMiddlewares(account, { blockchain })
-
-    this._registerProtocols(account, { blockchain })
-
-    return account
   }
 
   /**
@@ -201,15 +283,24 @@ export default class WDK {
    * @throws {Error} If no wallet has been registered for the given blockchain.
    */
   async getFeeRates (blockchain) {
-    if (!this._wallets.has(blockchain)) {
-      throw new Error(`No wallet registered for blockchain: ${blockchain}.`)
+    const startedAt = Date.now()
+
+    try {
+      if (!this._wallets.has(blockchain)) {
+        throw new Error(`No wallet registered for blockchain: ${blockchain}.`)
+      }
+
+      const wallet = this._wallets.get(blockchain)
+
+      const feeRates = await wallet.getFeeRates()
+
+      this._trace(TraceEvents.FeeRatesResolved, { startedAt, durationMs: Date.now() - startedAt, blockchain })
+
+      return feeRates
+    } catch (error) {
+      this._trace(TraceEvents.FeeRatesFailed, { startedAt, durationMs: Date.now() - startedAt, blockchain, error })
+      throw error
     }
-
-    const wallet = this._wallets.get(blockchain)
-
-    const feeRates = await wallet.getFeeRates()
-
-    return feeRates
   }
 
   /**
@@ -218,20 +309,43 @@ export default class WDK {
    * @param {string[]} [blockchains] - The blockchains to dispose. If omitted, all wallets are disposed.
    */
   dispose (blockchains) {
+    const startedAt = Date.now()
+    const disposed = []
+
     for (const [blockchain, wallet] of this._wallets) {
       if (!blockchains || blockchains.includes(blockchain)) {
         wallet.dispose()
         this._wallets.delete(blockchain)
+        disposed.push(blockchain)
       }
     }
+
+    this._trace(TraceEvents.Disposed, { startedAt, durationMs: Date.now() - startedAt, meta: { disposed } })
   }
 
   /** @private */
   async _runMiddlewares (account, { blockchain }) {
     if (this._middlewares[blockchain]) {
       for (const middleware of this._middlewares[blockchain]) {
-        await middleware(account)
+        const startedAt = Date.now()
+
+        try {
+          await middleware(account)
+          this._trace(TraceEvents.MiddlewareExecuted, { startedAt, durationMs: Date.now() - startedAt, blockchain })
+        } catch (error) {
+          this._trace(TraceEvents.MiddlewareFailed, { startedAt, durationMs: Date.now() - startedAt, blockchain, error })
+          throw error
+        }
       }
+    }
+  }
+
+  /** @private */
+  _trace (name, payload) {
+    try {
+      this._tracer({ name, ...payload })
+    } catch {
+      // Tracer errors must never break the orchestrator.
     }
   }
 

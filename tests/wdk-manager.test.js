@@ -6,7 +6,7 @@ import WalletManager from '@tetherto/wdk-wallet'
 
 import { BridgeProtocol, LendingProtocol, SwapProtocol } from '@tetherto/wdk-wallet/protocols'
 
-import WdkManager from '../index.js'
+import WdkManager, { TraceEvents } from '../index.js'
 
 const SEED_PHRASE = 'cook voyage document eight skate token alien guide drink uncle term abuse'
 
@@ -476,6 +476,105 @@ describe('WdkManager', () => {
       wdkManager.dispose([])
 
       expect(disposeMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('tracer', () => {
+    test('should not be invoked when no tracer is configured', () => {
+      const wdk = new WdkManager(SEED_PHRASE)
+
+      wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+      wdk.dispose()
+
+      expect(true).toBe(true)
+    })
+
+    test('should emit wdk.created on construction', () => {
+      const tracer = jest.fn()
+
+      new WdkManager(SEED_PHRASE, { tracer })
+
+      expect(tracer).toHaveBeenCalledWith(expect.objectContaining({ name: TraceEvents.Created }))
+    })
+
+    test('should emit wdk.wallet.registered with blockchain and duration', () => {
+      const tracer = jest.fn()
+      const wdk = new WdkManager(SEED_PHRASE, { tracer })
+
+      wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+
+      const event = tracer.mock.calls.find(([e]) => e.name === TraceEvents.WalletRegistered)?.[0]
+      expect(event).toBeDefined()
+      expect(event.blockchain).toBe('ethereum')
+      expect(typeof event.startedAt).toBe('number')
+      expect(typeof event.durationMs).toBe('number')
+    })
+
+    test('should emit wdk.account.resolved on success', async () => {
+      getAccountMock.mockResolvedValue({ getAddress: async () => '0x0' })
+
+      const tracer = jest.fn()
+      const wdk = new WdkManager(SEED_PHRASE, { tracer })
+      wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+
+      await wdk.getAccount('ethereum', 7)
+
+      const event = tracer.mock.calls.find(([e]) => e.name === TraceEvents.AccountResolved)?.[0]
+      expect(event).toBeDefined()
+      expect(event.blockchain).toBe('ethereum')
+      expect(event.meta).toEqual({ index: 7 })
+    })
+
+    test('should emit wdk.account.failed when no wallet is registered', async () => {
+      const tracer = jest.fn()
+      const wdk = new WdkManager(SEED_PHRASE, { tracer })
+
+      await expect(wdk.getAccount('ethereum', 0)).rejects.toThrow()
+
+      const event = tracer.mock.calls.find(([e]) => e.name === TraceEvents.AccountFailed)?.[0]
+      expect(event).toBeDefined()
+      expect(event.error).toBeInstanceOf(Error)
+    })
+
+    test('should emit wdk.middleware.executed for each middleware run', async () => {
+      getAccountMock.mockResolvedValue({ getAddress: async () => '0x0' })
+
+      const tracer = jest.fn()
+      const wdk = new WdkManager(SEED_PHRASE, { tracer })
+      wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+                .registerMiddleware('ethereum', async () => {})
+                .registerMiddleware('ethereum', async () => {})
+
+      await wdk.getAccount('ethereum', 0)
+
+      const events = tracer.mock.calls.filter(([e]) => e.name === TraceEvents.MiddlewareExecuted)
+      expect(events).toHaveLength(2)
+    })
+
+    test('should emit wdk.middleware.failed and re-throw when a middleware rejects', async () => {
+      getAccountMock.mockResolvedValue({ getAddress: async () => '0x0' })
+
+      const tracer = jest.fn()
+      const wdk = new WdkManager(SEED_PHRASE, { tracer })
+      const boom = new Error('boom')
+      wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+                .registerMiddleware('ethereum', async () => { throw boom })
+
+      await expect(wdk.getAccount('ethereum', 0)).rejects.toBe(boom)
+
+      const event = tracer.mock.calls.find(([e]) => e.name === TraceEvents.MiddlewareFailed)?.[0]
+      expect(event).toBeDefined()
+      expect(event.error).toBe(boom)
+    })
+
+    test('should not propagate errors thrown by the tracer itself', () => {
+      const tracer = jest.fn(() => { throw new Error('tracer exploded') })
+
+      expect(() => new WdkManager(SEED_PHRASE, { tracer })).not.toThrow()
+    })
+
+    test('should ignore non-function tracer values', () => {
+      expect(() => new WdkManager(SEED_PHRASE, { tracer: 'not a function' })).not.toThrow()
     })
   })
 })

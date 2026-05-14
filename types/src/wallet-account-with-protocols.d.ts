@@ -1,5 +1,9 @@
+/** @typedef {import('@tetherto/wdk-wallet/protocols').ISwapProtocol} ISwapProtocol */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').IBridgeProtocol} IBridgeProtocol */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').ILendingProtocol} ILendingProtocol */
+/** @typedef {import('@tetherto/wdk-wallet/protocols').IFiatProtocol} IFiatProtocol */
 /** @interface */
-export interface IWalletAccountWithProtocols extends IWalletAccount {
+export class IWalletAccountWithProtocols {
     /**
      * Registers a new protocol for this account
      *
@@ -50,5 +54,3 @@ export type ISwapProtocol = import("@tetherto/wdk-wallet/protocols").ISwapProtoc
 export type IBridgeProtocol = import("@tetherto/wdk-wallet/protocols").IBridgeProtocol;
 export type ILendingProtocol = import("@tetherto/wdk-wallet/protocols").ILendingProtocol;
 export type IFiatProtocol = import("@tetherto/wdk-wallet/protocols").IFiatProtocol;
-import { IWalletAccount } from "@tetherto/wdk-wallet";
-import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol } from "@tetherto/wdk-wallet/protocols";

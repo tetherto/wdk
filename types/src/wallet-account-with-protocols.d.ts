@@ -3,7 +3,10 @@
 /** @typedef {import('@tetherto/wdk-wallet/protocols').ILendingProtocol} ILendingProtocol */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').IFiatProtocol} IFiatProtocol */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').ISwidgeProtocol} ISwidgeProtocol */
-/** @interface */
+/**
+ * @interface
+ * @extends {IWalletAccount}
+ */
 export class IWalletAccountWithProtocols {
     /**
      * Registers a new protocol for this account

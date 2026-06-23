@@ -26,6 +26,15 @@ import PolicyEngine from './policy/policy-engine.js'
 
 /** @typedef {import('./wallet-account-with-protocols.js').IWalletAccountWithProtocols} IWalletAccountWithProtocols */
 
+/**
+ * The shape returned by `getAccount` / `getAccountByPath`: the underlying
+ * IWalletAccount (sendTransaction, signTransaction, transfer, approve,
+ * sign, …) plus the protocol-getter surface added by the WDK at account
+ * retrieval time. Concrete wallet packages may further extend this shape.
+ *
+ * @typedef {IWalletAccount & IWalletAccountWithProtocols} WdkAccount
+ */
+
 /** @typedef {<A extends IWalletAccount>(account: A) => Promise<void>} MiddlewareFunction */
 
 /** @typedef {import('./policy/policy-engine.js').Policy} Policy */
@@ -212,7 +221,7 @@ export default class WDK {
    *
    * @param {string} blockchain - The name of the blockchain (e.g., "ethereum").
    * @param {number} [index] - The index of the account to get (default: 0).
-   * @returns {Promise<IWalletAccountWithProtocols>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
+   * @returns {Promise<WdkAccount>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
    * @throws {Error} If no wallet has been registered for the given blockchain.
    * @throws {PolicyConfigurationError} If a registered policy applies but the underlying wallet account does not implement `toReadOnlyAccount()`.
    */
@@ -237,7 +246,7 @@ export default class WDK {
    *
    * @param {string} blockchain - The name of the blockchain (e.g., "ethereum").
    * @param {string} path - The derivation path (e.g., "0'/0/0").
-   * @returns {Promise<IWalletAccountWithProtocols>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
+   * @returns {Promise<WdkAccount>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
    * @throws {Error} If no wallet has been registered for the given blockchain.
    * @throws {PolicyConfigurationError} If a registered policy applies but the underlying wallet account does not implement `toReadOnlyAccount()`.
    */

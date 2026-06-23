@@ -26,7 +26,10 @@ import { IWalletAccount, NotImplementedError } from '@tetherto/wdk-wallet'
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').ISwidgeProtocol} ISwidgeProtocol */
 
-/** @interface */
+/**
+ * @interface
+ * @extends {IWalletAccount}
+ */
 export class IWalletAccountWithProtocols extends IWalletAccount {
   /**
    * Registers a new protocol for this account

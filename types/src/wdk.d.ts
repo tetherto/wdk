@@ -1,6 +1,14 @@
 /** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
 /** @typedef {import('@tetherto/wdk-wallet').FeeRates} FeeRates */
 /** @typedef {import('./wallet-account-with-protocols.js').IWalletAccountWithProtocols} IWalletAccountWithProtocols */
+/**
+ * The shape returned by `getAccount` / `getAccountByPath`: the underlying
+ * IWalletAccount (sendTransaction, signTransaction, transfer, approve,
+ * sign, …) plus the protocol-getter surface added by the WDK at account
+ * retrieval time. Concrete wallet packages may further extend this shape.
+ *
+ * @typedef {IWalletAccount & IWalletAccountWithProtocols} WdkAccount
+ */
 /** @typedef {<A extends IWalletAccount>(account: A) => Promise<void>} MiddlewareFunction */
 /** @typedef {import('./policy/policy-engine.js').Policy} Policy */
 /** @typedef {import('./policy/policy-engine.js').PolicyRule} PolicyRule */
@@ -106,21 +114,21 @@ export default class WDK {
      *
      * @param {string} blockchain - The name of the blockchain (e.g., "ethereum").
      * @param {number} [index] - The index of the account to get (default: 0).
-     * @returns {Promise<IWalletAccountWithProtocols>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
+     * @returns {Promise<WdkAccount>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
      * @throws {Error} If no wallet has been registered for the given blockchain.
      * @throws {PolicyConfigurationError} If a registered policy applies but the underlying wallet account does not implement `toReadOnlyAccount()`.
      */
-    getAccount(blockchain: string, index?: number): Promise<IWalletAccountWithProtocols>;
+    getAccount(blockchain: string, index?: number): Promise<WdkAccount>;
     /**
      * Returns the wallet account for a specific blockchain and BIP-44 derivation path.
      *
      * @param {string} blockchain - The name of the blockchain (e.g., "ethereum").
      * @param {string} path - The derivation path (e.g., "0'/0/0").
-     * @returns {Promise<IWalletAccountWithProtocols>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
+     * @returns {Promise<WdkAccount>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
      * @throws {Error} If no wallet has been registered for the given blockchain.
      * @throws {PolicyConfigurationError} If a registered policy applies but the underlying wallet account does not implement `toReadOnlyAccount()`.
      */
-    getAccountByPath(blockchain: string, path: string): Promise<IWalletAccountWithProtocols>;
+    getAccountByPath(blockchain: string, path: string): Promise<WdkAccount>;
     /**
      * Returns the current fee rates for a specific blockchain.
      *
@@ -145,6 +153,13 @@ export default class WDK {
 export type IWalletAccount = import("@tetherto/wdk-wallet").IWalletAccount;
 export type FeeRates = import("@tetherto/wdk-wallet").FeeRates;
 export type IWalletAccountWithProtocols = import("./wallet-account-with-protocols.js").IWalletAccountWithProtocols;
+/**
+ * The shape returned by `getAccount` / `getAccountByPath`: the underlying
+ * IWalletAccount (sendTransaction, signTransaction, transfer, approve,
+ * sign, …) plus the protocol-getter surface added by the WDK at account
+ * retrieval time. Concrete wallet packages may further extend this shape.
+ */
+export type WdkAccount = IWalletAccount & IWalletAccountWithProtocols;
 export type MiddlewareFunction = <A extends IWalletAccount>(account: A) => Promise<void>;
 export type Policy = import("./policy/policy-engine.js").Policy;
 export type PolicyRule = import("./policy/policy-engine.js").PolicyRule;

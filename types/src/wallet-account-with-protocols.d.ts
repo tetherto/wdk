@@ -4,8 +4,15 @@
 /** @typedef {import('@tetherto/wdk-wallet/protocols').IFiatProtocol} IFiatProtocol */
 /** @typedef {import('@tetherto/wdk-wallet/protocols').ISwidgeProtocol} ISwidgeProtocol */
 /**
+ * Interface for wallet accounts that also expose the WDK's protocol-getter
+ * helpers (`registerProtocol`, `getSwapProtocol`, `getBridgeProtocol`,
+ * `getLendingProtocol`, `getFiatProtocol`, `getSwidgeProtocol`). The
+ * concrete shape is materialized at runtime by `wdk.getAccount` /
+ * `getAccountByPath` after middlewares and protocol getters have been
+ * installed. See `WdkAccount` for the consumer-facing type that pairs
+ * this surface with the underlying `IWalletAccount` shape.
+ *
  * @interface
- * @extends {IWalletAccount}
  */
 export class IWalletAccountWithProtocols {
     /**

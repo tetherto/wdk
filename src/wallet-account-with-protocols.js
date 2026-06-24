@@ -31,13 +31,16 @@ import { IWalletAccount, NotImplementedError } from '@tetherto/wdk-wallet'
 /** @typedef {import('@tetherto/wdk-wallet/protocols').ISwidgeProtocol} ISwidgeProtocol */
 /** @typedef {typeof import('@tetherto/wdk-wallet/protocols').SwidgeProtocol} SwidgeProtocolCtor */
 
+/** @typedef {import('@tetherto/wdk-wallet/protocols').ISdaProtocol} ISdaProtocol */
+/** @typedef {typeof import('@tetherto/wdk-wallet/protocols').SdaProtocol} SdaProtocolCtor */
+
 /**
  * Interface for wallet accounts that also expose the WDK's protocol-getter
  * helpers (`registerProtocol`, `getSwapProtocol`, `getBridgeProtocol`,
- * `getLendingProtocol`, `getFiatProtocol`, `getSwidgeProtocol`). The
- * concrete shape is materialized at runtime by `wdk.getAccount` /
- * `getAccountByPath` after middlewares and protocol getters have been
- * installed. See `WdkAccount` for the consumer-facing type that pairs
+ * `getLendingProtocol`, `getFiatProtocol`, `getSwidgeProtocol`,
+ * `getSdaProtocol`). The concrete shape is materialized at runtime by
+ * `wdk.getAccount` / `getAccountByPath` after middlewares and protocol getters
+ * have been installed. See `WdkAccount` for the consumer-facing type that pairs
  * this surface with the underlying `IWalletAccount` shape.
  *
  * @interface
@@ -49,7 +52,7 @@ export class IWalletAccountWithProtocols extends IWalletAccount {
    * The label must be unique in the scope of the account and the type of protocol (i.e., there can’t be two protocols of the same
    * type bound to the same account with the same label).
    *
-   * @template {SwapProtocolCtor | BridgeProtocolCtor | LendingProtocolCtor | FiatProtocolCtor | SwidgeProtocolCtor} P
+   * @template {SwapProtocolCtor | BridgeProtocolCtor | LendingProtocolCtor | FiatProtocolCtor | SwidgeProtocolCtor | SdaProtocolCtor} P
    * @param {string} label - The label.
    * @param {P} Protocol - The protocol class.
    * @param {ConstructorParameters<P>[1]} config - The protocol configuration.
@@ -112,5 +115,16 @@ export class IWalletAccountWithProtocols extends IWalletAccount {
    */
   getSwidgeProtocol (label) {
     throw new NotImplementedError('getSwidgeProtocol(label)')
+  }
+
+  /**
+   * Returns the SDA protocol with the given label.
+   *
+   * @param {string} label - The label.
+   * @returns {ISdaProtocol} The SDA protocol.
+   * @throws {Error} If no SDA protocol has been registered on this account with the given label.
+   */
+  getSdaProtocol (label) {
+    throw new NotImplementedError('getSdaProtocol(label)')
   }
 }

@@ -20,6 +20,7 @@
 /** @typedef {import('./src/wdk.js').MiddlewareFunction} MiddlewareFunction */
 
 /** @typedef {import('./src/wallet-account-with-protocols.js').IWalletAccountWithProtocols} IWalletAccountWithProtocols */
+/** @typedef {import('./src/wdk.js').WdkAccount} WdkAccount */
 
 /** @typedef {import('./src/policy/index.js').Policy} Policy */
 /** @typedef {import('./src/policy/index.js').PolicyRule} PolicyRule */

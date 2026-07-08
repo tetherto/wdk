@@ -17,16 +17,31 @@
 import { IWalletAccount, NotImplementedError } from '@tetherto/wdk-wallet'
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').ISwapProtocol} ISwapProtocol */
+/** @typedef {typeof import('@tetherto/wdk-wallet/protocols').SwapProtocol} SwapProtocolCtor */
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').IBridgeProtocol} IBridgeProtocol */
+/** @typedef {typeof import('@tetherto/wdk-wallet/protocols').BridgeProtocol} BridgeProtocolCtor */
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').ILendingProtocol} ILendingProtocol */
+/** @typedef {typeof import('@tetherto/wdk-wallet/protocols').LendingProtocol} LendingProtocolCtor */
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').IFiatProtocol} IFiatProtocol */
+/** @typedef {typeof import('@tetherto/wdk-wallet/protocols').FiatProtocol} FiatProtocolCtor */
 
 /** @typedef {import('@tetherto/wdk-wallet/protocols').ISwidgeProtocol} ISwidgeProtocol */
+/** @typedef {typeof import('@tetherto/wdk-wallet/protocols').SwidgeProtocol} SwidgeProtocolCtor */
 
-/** @interface */
+/**
+ * Interface for wallet accounts that also expose the WDK's protocol-getter
+ * helpers (`registerProtocol`, `getSwapProtocol`, `getBridgeProtocol`,
+ * `getLendingProtocol`, `getFiatProtocol`, `getSwidgeProtocol`). The
+ * concrete shape is materialized at runtime by `wdk.getAccount` /
+ * `getAccountByPath` after middlewares and protocol getters have been
+ * installed. See `WdkAccount` for the consumer-facing type that pairs
+ * this surface with the underlying `IWalletAccount` shape.
+ *
+ * @interface
+ */
 export class IWalletAccountWithProtocols extends IWalletAccount {
   /**
    * Registers a new protocol for this account
@@ -34,7 +49,7 @@ export class IWalletAccountWithProtocols extends IWalletAccount {
    * The label must be unique in the scope of the account and the type of protocol (i.e., there can’t be two protocols of the same
    * type bound to the same account with the same label).
    *
-   * @template {typeof SwapProtocol | typeof BridgeProtocol | typeof LendingProtocol | typeof FiatProtocol | typeof SwidgeProtocol} P
+   * @template {SwapProtocolCtor | BridgeProtocolCtor | LendingProtocolCtor | FiatProtocolCtor | SwidgeProtocolCtor} P
    * @param {string} label - The label.
    * @param {P} Protocol - The protocol class.
    * @param {ConstructorParameters<P>[1]} config - The protocol configuration.

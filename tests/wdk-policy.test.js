@@ -717,6 +717,93 @@ describe('WDK — policy engine', () => {
   })
 
   // -------------------------------------------------------------------------
+  // Internal-reference containment
+  // -------------------------------------------------------------------------
+
+  describe('internal-reference containment', () => {
+    test('key material (keyPair) is not reachable through a governed account', async () => {
+      getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, {
+        keyPair: { privateKey: new Uint8Array([1, 2, 3]) }
+      }))
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(projectAllowAll('p'))
+
+      const account = await wdk.getAccount('ethereum', 0)
+
+      expect(account.keyPair).toBeUndefined()
+    })
+
+    test('internal references (_signer, _provider, _config) are not reachable through a governed account', async () => {
+      getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, {
+        _signer: { signTransaction: jest.fn() },
+        _provider: { send: jest.fn() },
+        _config: { transactionMaxFee: 1n }
+      }))
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(projectAllowAll('p'))
+
+      const account = await wdk.getAccount('ethereum', 0)
+
+      expect(account._signer).toBeUndefined()
+      expect(account._provider).toBeUndefined()
+      expect(account._config).toBeUndefined()
+    })
+
+    test('hiding internal references leaves safe reads and enforced operations working', async () => {
+      getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, {
+        _signer: { signTransaction: jest.fn() }
+      }))
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(projectAllowAll('p'))
+
+      const account = await wdk.getAccount('ethereum', 0)
+
+      expect(account._signer).toBeUndefined()
+      expect(account.path).toBe(PATH_DEFAULT)
+      expect(await account.getBalance()).toBe(DUMMY_BALANCE)
+
+      const result = await account.sendTransaction({ to: RECIPIENT, value: 1n })
+      expect(result.hash).toBe(DUMMY_TX_HASH)
+    })
+
+    test("a protocol's raw-account back-reference (_account) is not reachable through the protocol proxy", async () => {
+      const swapInstanceMock = jest.fn().mockResolvedValue(DUMMY_SWAP_RESULT)
+
+      class MySwapProtocol extends SwapProtocol {
+        constructor (account) { super(); this._account = account }
+        async swap (opts) { return swapInstanceMock(opts) }
+      }
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerProtocol('ethereum', 'velora', MySwapProtocol, {})
+        .registerPolicy({
+          id: 'no-swaps',
+          name: 'no-swaps',
+          scope: 'project',
+          rules: [{ name: 'deny-swap', operation: 'swap', action: 'DENY', conditions: [] }]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const swap = account.getSwapProtocol('velora')
+
+      expect(swap._account).toBeUndefined()
+
+      const denied = await catchAsync(() => swap.swap({ tokenIn: 'A', tokenOut: 'B', tokenInAmount: 1n }))
+      expect(denied.name).toBe('PolicyViolationError')
+      expect(swapInstanceMock).not.toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
   // PolicyViolationError shape
   // -------------------------------------------------------------------------
 

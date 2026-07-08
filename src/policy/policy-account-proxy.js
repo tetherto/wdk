@@ -31,6 +31,10 @@ const PROTOCOL_GETTERS = [
   ['getSdaProtocol', 'sda']
 ]
 
+function isProtectedMember (prop) {
+  return prop === 'keyPair' || (typeof prop === 'string' && prop.startsWith('_'))
+}
+
 /**
  * Returns a Proxy that exposes policy-enforced versions of write methods on
  * the given account. The policy engine itself does not mutate the account
@@ -133,6 +137,8 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
         }
       }
 
+      if (isProtectedMember(prop)) return undefined
+
       const value = Reflect.get(target, prop, target)
 
       // Bind functions to the underlying target so internal `this.method()`
@@ -186,6 +192,8 @@ function wrapProtocolInProxy (protocol, opsToWrap, ctx) {
   return new Proxy(protocol, {
     get (target, prop) {
       if (enforcedMethods.has(prop)) return enforcedMethods.get(prop)
+
+      if (isProtectedMember(prop)) return undefined
 
       const value = Reflect.get(target, prop, target)
 

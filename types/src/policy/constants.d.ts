@@ -8,4 +8,5 @@ export namespace PROTOCOL_METHODS {
     let lending: string[];
     let fiat: string[];
     let swidge: string[];
+    let sda: string[];
 }

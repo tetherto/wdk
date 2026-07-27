@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals'
 
 import WalletManager from '@tetherto/wdk-wallet'
 
-import { BridgeProtocol, SwapProtocol, SwidgeProtocol } from '@tetherto/wdk-wallet/protocols'
+import { BridgeProtocol, SdaProtocol, SwapProtocol, SwidgeProtocol } from '@tetherto/wdk-wallet/protocols'
 
 import WDK, { PolicyConfigurationError, PolicyViolationError } from '../index.js'
 
@@ -19,6 +19,8 @@ const DUMMY_QUOTE = { fee: 1n }
 const DUMMY_SWAP_RESULT = { hash: '0xdummy-swap-hash' }
 const DUMMY_BRIDGE_RESULT = { hash: '0xdummy-bridge-hash' }
 const DUMMY_SWIDGE_RESULT = { hash: '0xdummy-swidge-hash' }
+const DUMMY_SDA_ADDRESS_RESULT = [{ address: '0xdummy-deposit-address' }]
+const DUMMY_SDA_ROUTES = [{ sourceChains: ['arbitrum'], destinationChain: 'polygon' }]
 const DUMMY_SIGNED_TX = '0xdummy-signed-tx'
 
 // Test inputs (no DUMMY_ prefix per CQ5). Addresses are valid EVM shape
@@ -1796,6 +1798,73 @@ describe('WDK — policy engine', () => {
       expect(denied.policyId).toBe('no-swidge')
       expect(denied.ruleName).toBe('deny-swidge')
       expect(swidgeInstanceMock).not.toHaveBeenCalled()
+    })
+
+    test('an sda protocol write method (createDepositAddress) is wrapped and blocks on DENY; getSupportedRoutes is not wrapped', async () => {
+      const createDepositAddressInstanceMock = jest.fn().mockResolvedValue(DUMMY_SDA_ADDRESS_RESULT)
+      const getSupportedRoutesInstanceMock = jest.fn().mockResolvedValue(DUMMY_SDA_ROUTES)
+
+      class MySdaProtocol extends SdaProtocol {
+        constructor () { super() }
+        async createDepositAddress (opts) { return createDepositAddressInstanceMock(opts) }
+        async getSupportedRoutes (opts) { return getSupportedRoutesInstanceMock(opts) }
+      }
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerProtocol('ethereum', 'accumulate', MySdaProtocol, {})
+        .registerPolicy({
+          id: 'no-sda',
+          name: 'no-sda',
+          scope: 'project',
+          rules: [{ name: 'deny-create-deposit', operation: 'createDepositAddress', action: 'DENY', conditions: [] }]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const sda = account.getSdaProtocol('accumulate')
+
+      const denied = await catchAsync(() => sda.createDepositAddress({ sourceChains: ['arbitrum'], destinationChain: 'polygon' }))
+
+      expect(denied.name).toBe('PolicyViolationError')
+      expect(denied.policyId).toBe('no-sda')
+      expect(denied.ruleName).toBe('deny-create-deposit')
+      expect(createDepositAddressInstanceMock).not.toHaveBeenCalled()
+
+      const routes = await sda.getSupportedRoutes({})
+      expect(routes).toEqual(DUMMY_SDA_ROUTES)
+      expect(getSupportedRoutesInstanceMock).toHaveBeenCalledWith({})
+    })
+
+    test('account.simulate.getSdaProtocol(label).createDepositAddress(...) returns a structured DENY without executing', async () => {
+      const createDepositAddressInstanceMock = jest.fn().mockResolvedValue(DUMMY_SDA_ADDRESS_RESULT)
+
+      class MySdaProtocol extends SdaProtocol {
+        constructor () { super() }
+        async createDepositAddress (opts) { return createDepositAddressInstanceMock(opts) }
+      }
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerProtocol('ethereum', 'accumulate', MySdaProtocol, {})
+        .registerPolicy({
+          id: 'no-sda',
+          name: 'no-sda',
+          scope: 'project',
+          rules: [{ name: 'deny-create-deposit', operation: 'createDepositAddress', action: 'DENY', conditions: [] }]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const sim = await account.simulate.getSdaProtocol('accumulate').createDepositAddress({ sourceChains: ['arbitrum'], destinationChain: 'polygon' })
+
+      expect(sim.decision).toBe('DENY')
+      expect(sim.policy_id).toBe('no-sda')
+      expect(sim.matched_rule).toBe('deny-create-deposit')
+      expect(sim.reason).toBe('deny-create-deposit')
+      expect(createDepositAddressInstanceMock).not.toHaveBeenCalled()
     })
 
     test('account.registerProtocol(...) returns the proxy so chained calls stay enforced (C-2)', async () => {

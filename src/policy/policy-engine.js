@@ -45,7 +45,8 @@ import {
  * @typedef {'sendTransaction' | 'signTransaction' | 'transfer' | 'approve'
  *   | 'sign' | 'signTypedData' | 'signAuthorization' | 'delegate' | 'revokeDelegation'
  *   | 'swap' | 'bridge' | 'supply' | 'withdraw' | 'borrow' | 'repay' | 'buy' | 'sell'
- *   | 'swidge' | '*'} PolicyOperation
+ *   | 'swidge' | 'createDepositAddress' | 'renewDepositAddress'
+ *   | 'recoverDepositAddress' | 'disableDepositAddress' | '*'} PolicyOperation
  */
 
 /**

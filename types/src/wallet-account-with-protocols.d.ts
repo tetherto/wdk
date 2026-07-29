@@ -1,9 +1,3 @@
-/** @typedef {import('@tetherto/wdk-wallet/protocols').ISwapProtocol} ISwapProtocol */
-/** @typedef {import('@tetherto/wdk-wallet/protocols').IBridgeProtocol} IBridgeProtocol */
-/** @typedef {import('@tetherto/wdk-wallet/protocols').ILendingProtocol} ILendingProtocol */
-/** @typedef {import('@tetherto/wdk-wallet/protocols').IFiatProtocol} IFiatProtocol */
-/** @typedef {import('@tetherto/wdk-wallet/protocols').ISwidgeProtocol} ISwidgeProtocol */
-/** @typedef {import('@tetherto/wdk-wallet/protocols').ISdaProtocol} ISdaProtocol */
 /**
  * Interface for wallet accounts that also expose the WDK's protocol-getter
  * helpers (`registerProtocol`, `getSwapProtocol`, `getBridgeProtocol`,
@@ -22,13 +16,13 @@ export class IWalletAccountWithProtocols {
      * The label must be unique in the scope of the account and the type of protocol (i.e., there can’t be two protocols of the same
      * type bound to the same account with the same label).
      *
-     * @template {typeof import('@tetherto/wdk-wallet/protocols').SwapProtocol | typeof import('@tetherto/wdk-wallet/protocols').BridgeProtocol | typeof import('@tetherto/wdk-wallet/protocols').LendingProtocol | typeof import('@tetherto/wdk-wallet/protocols').FiatProtocol | typeof import('@tetherto/wdk-wallet/protocols').SwidgeProtocol | typeof import('@tetherto/wdk-wallet/protocols').SdaProtocol} P
+     * @template {typeof SwapProtocol | typeof BridgeProtocol | typeof LendingProtocol | typeof FiatProtocol | typeof SwidgeProtocol | typeof SdaProtocol} P
      * @param {string} label - The label.
      * @param {P} Protocol - The protocol class.
      * @param {ConstructorParameters<P>[1]} config - The protocol configuration.
      * @returns {IWalletAccountWithProtocols} The account.
      */
-    registerProtocol<P extends typeof import("@tetherto/wdk-wallet/protocols").SwapProtocol | typeof import("@tetherto/wdk-wallet/protocols").BridgeProtocol | typeof import("@tetherto/wdk-wallet/protocols").LendingProtocol | typeof import("@tetherto/wdk-wallet/protocols").FiatProtocol | typeof import("@tetherto/wdk-wallet/protocols").SwidgeProtocol | typeof import("@tetherto/wdk-wallet/protocols").SdaProtocol>(label: string, Protocol: P, config: ConstructorParameters<P>[1]): IWalletAccountWithProtocols;
+    registerProtocol<P extends typeof SwapProtocol | typeof BridgeProtocol | typeof LendingProtocol | typeof FiatProtocol | typeof SwidgeProtocol | typeof SdaProtocol>(label: string, Protocol: P, config: ConstructorParameters<P>[1]): IWalletAccountWithProtocols;
     /**
      * Returns the swap protocol with the given label.
      *
@@ -84,3 +78,9 @@ export type ILendingProtocol = import("@tetherto/wdk-wallet/protocols").ILending
 export type IFiatProtocol = import("@tetherto/wdk-wallet/protocols").IFiatProtocol;
 export type ISwidgeProtocol = import("@tetherto/wdk-wallet/protocols").ISwidgeProtocol;
 export type ISdaProtocol = import("@tetherto/wdk-wallet/protocols").ISdaProtocol;
+import { SwapProtocol } from '@tetherto/wdk-wallet/protocols';
+import { BridgeProtocol } from '@tetherto/wdk-wallet/protocols';
+import { LendingProtocol } from '@tetherto/wdk-wallet/protocols';
+import { FiatProtocol } from '@tetherto/wdk-wallet/protocols';
+import { SwidgeProtocol } from '@tetherto/wdk-wallet/protocols';
+import { SdaProtocol } from '@tetherto/wdk-wallet/protocols';

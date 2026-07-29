@@ -36,6 +36,85 @@ function isProtectedMember (prop) {
 }
 
 /**
+ * Wraps `subject` in a Proxy that serves `substitutions` in place of the
+ * subject's own members and treats protected members as absent.
+ *
+ * Every trap that can observe a member consults the same two rules, because a
+ * `get` trap on its own guards only one of several reflective paths:
+ *
+ * - `getOwnPropertyDescriptor` does not route through `get`, so without a trap
+ *   `Object.getOwnPropertyDescriptor(account, '_signer').value` hands back the
+ *   raw signer, and — worse — `...(account, 'getSwapProtocol').value(label)`
+ *   hands back the unenforced protocol getter `_registerProtocols` installed
+ *   as an own property, whose methods skip policy evaluation entirely.
+ * - `has` and `ownKeys` would keep reporting protected members, leaking the
+ *   shape of the underlying account even where the values are hidden.
+ *
+ * Substituted members are described with the enforced value rather than
+ * omitted, so a descriptor read observes the same member `get` returns.
+ * Descriptors are only reported for members the subject actually owns, which
+ * keeps prototype methods reading as inherited exactly as on a raw account.
+ *
+ * `preventExtensions` is refused because hiding own members is only a legal
+ * Proxy result while the subject stays extensible. Letting a caller freeze the
+ * subject would turn every later descriptor read or `ownKeys` call into a
+ * TypeError.
+ *
+ * @param {object} subject - The object to guard.
+ * @param {Map<string, unknown>} substitutions - The members to serve in place of the subject's own.
+ * @returns {object} The guarded proxy.
+ */
+function createGuardedProxy (subject, substitutions) {
+  return new Proxy(subject, {
+    get (target, prop) {
+      if (substitutions.has(prop)) return substitutions.get(prop)
+
+      if (isProtectedMember(prop)) return undefined
+
+      const value = Reflect.get(target, prop, target)
+
+      // Bind functions to the underlying target so internal `this.method()`
+      // calls resolve on the original account, bypassing the proxy. This is
+      // how nested-call escape works without any async-context tracking.
+      if (typeof value === 'function') return value.bind(target)
+
+      return value
+    },
+
+    getOwnPropertyDescriptor (target, prop) {
+      if (isProtectedMember(prop)) return undefined
+
+      const descriptor = Reflect.getOwnPropertyDescriptor(target, prop)
+
+      if (descriptor === undefined || !substitutions.has(prop)) return descriptor
+
+      return {
+        value: substitutions.get(prop),
+        writable: false,
+        enumerable: descriptor.enumerable,
+        configurable: true
+      }
+    },
+
+    has (target, prop) {
+      if (substitutions.has(prop)) return true
+
+      if (isProtectedMember(prop)) return false
+
+      return Reflect.has(target, prop)
+    },
+
+    ownKeys (target) {
+      return Reflect.ownKeys(target).filter((prop) => !isProtectedMember(prop))
+    },
+
+    preventExtensions () {
+      return false
+    }
+  })
+}
+
+/**
  * Returns a Proxy that exposes policy-enforced versions of write methods on
  * the given account. The policy engine itself does not mutate the account
  * (the WDK's `_registerProtocols` step does install
@@ -81,7 +160,9 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
 
   const ctx = { account, readOnlyAccount, blockchain, index, engine }
 
-  const enforcedMethods = new Map()
+  const substitutions = new Map()
+
+  const enforcedOperations = []
 
   // Wrap every method in OPERATIONS that exists on the underlying account,
   // not just the ones referenced by registered policies. The evaluator
@@ -91,11 +172,11 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
   // from moving the same tokens).
   for (const op of OPERATIONS) {
     if (typeof account[op] === 'function') {
-      enforcedMethods.set(op, buildEnforcedMethod(op, account[op].bind(account), ctx))
+      enforcedOperations.push(op)
+
+      substitutions.set(op, buildEnforcedMethod(op, account[op].bind(account), ctx))
     }
   }
-
-  const enforcedGetters = new Map()
 
   for (const [getterName, type] of PROTOCOL_GETTERS) {
     if (typeof account[getterName] !== 'function') continue
@@ -103,56 +184,37 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
     const writeMethods = PROTOCOL_METHODS[type]
     const originalGetter = account[getterName].bind(account)
 
-    enforcedGetters.set(getterName, (label) => {
+    substitutions.set(getterName, (label) => {
       const protocol = originalGetter(label)
 
       return wrapProtocolInProxy(protocol, writeMethods, ctx)
     })
   }
 
-  const simulate = buildSimulateMirror(Array.from(enforcedMethods.keys()), ctx)
+  substitutions.set('simulate', buildSimulateMirror(enforcedOperations, ctx))
 
   // Late-bound reference to the proxy itself, so the `registerProtocol`
   // interceptor below can return the proxy instead of the raw account.
   const handle = { proxy: null }
 
-  const proxyHandle = new Proxy(account, {
-    get (target, prop) {
-      if (enforcedMethods.has(prop)) return enforcedMethods.get(prop)
-      if (enforcedGetters.has(prop)) return enforcedGetters.get(prop)
-      if (prop === 'simulate') return simulate
+  // `account.registerProtocol(...)` returns the raw account by design (see
+  // `_registerProtocols` in wdk.js). Without intercepting,
+  // `proxy.registerProtocol(...).sendTransaction(...)` would skip enforcement
+  // entirely because the caller is no longer holding the proxy. Rewrite the
+  // return value to the proxy itself.
+  if (typeof account.registerProtocol === 'function') {
+    const registerProtocol = account.registerProtocol.bind(account)
 
-      // `account.registerProtocol(...)` returns the raw account by design
-      // (see `_registerProtocols` in wdk.js). Without intercepting
-      // here, `proxy.registerProtocol(...).sendTransaction(...)` would skip
-      // enforcement entirely because the caller is no longer holding the
-      // proxy. Rewrite the return value to the proxy itself.
-      if (prop === 'registerProtocol' && typeof target.registerProtocol === 'function') {
-        const fn = target.registerProtocol.bind(target)
+    substitutions.set('registerProtocol', (...args) => {
+      registerProtocol(...args)
 
-        return (...args) => {
-          fn(...args)
+      return handle.proxy
+    })
+  }
 
-          return handle.proxy
-        }
-      }
+  handle.proxy = createGuardedProxy(account, substitutions)
 
-      if (isProtectedMember(prop)) return undefined
-
-      const value = Reflect.get(target, prop, target)
-
-      // Bind functions to the underlying target so internal `this.method()`
-      // calls resolve on the original account, bypassing the proxy. This is
-      // how nested-call escape works without any async-context tracking.
-      if (typeof value === 'function') return value.bind(target)
-
-      return value
-    }
-  })
-
-  handle.proxy = proxyHandle
-
-  return proxyHandle
+  return handle.proxy
 }
 
 function buildEnforcedMethod (name, boundOriginal, ctx) {
@@ -181,27 +243,15 @@ function buildEnforcedMethod (name, boundOriginal, ctx) {
 }
 
 function wrapProtocolInProxy (protocol, opsToWrap, ctx) {
-  const enforcedMethods = new Map()
+  const substitutions = new Map()
 
   for (const method of opsToWrap) {
     if (typeof protocol[method] === 'function') {
-      enforcedMethods.set(method, buildEnforcedMethod(method, protocol[method].bind(protocol), ctx))
+      substitutions.set(method, buildEnforcedMethod(method, protocol[method].bind(protocol), ctx))
     }
   }
 
-  return new Proxy(protocol, {
-    get (target, prop) {
-      if (enforcedMethods.has(prop)) return enforcedMethods.get(prop)
-
-      if (isProtectedMember(prop)) return undefined
-
-      const value = Reflect.get(target, prop, target)
-
-      if (typeof value === 'function') return value.bind(target)
-
-      return value
-    }
-  })
+  return createGuardedProxy(protocol, substitutions)
 }
 
 function buildSimulateMirror (methodNames, ctx) {

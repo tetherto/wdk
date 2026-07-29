@@ -36,7 +36,11 @@ export const OPERATIONS = [
   'repay',
   'buy',
   'sell',
-  'swidge'
+  'swidge',
+  'createDepositAddress',
+  'renewDepositAddress',
+  'recoverDepositAddress',
+  'disableDepositAddress'
 ]
 
 export const WILDCARD = '*'
@@ -50,5 +54,6 @@ export const PROTOCOL_METHODS = {
   bridge: ['bridge'],
   lending: ['supply', 'withdraw', 'borrow', 'repay'],
   fiat: ['buy', 'sell'],
-  swidge: ['swidge']
+  swidge: ['swidge'],
+  sda: ['createDepositAddress', 'renewDepositAddress', 'recoverDepositAddress', 'disableDepositAddress']
 }

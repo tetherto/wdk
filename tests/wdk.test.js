@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals'
 
 import WalletManager from '@tetherto/wdk-wallet'
 
-import { BridgeProtocol, LendingProtocol, SwapProtocol, SwidgeProtocol } from '@tetherto/wdk-wallet/protocols'
+import { BridgeProtocol, LendingProtocol, SdaProtocol, SwapProtocol, SwidgeProtocol } from '@tetherto/wdk-wallet/protocols'
 
 import WDK from '../index.js'
 
@@ -316,6 +316,65 @@ describe('WDK', () => {
           expect(sameAccount.getSwidgeProtocol('test')).toBeInstanceOf(SwidgeProtocolMock)
         })
       })
+
+      describe('getSdaProtocol', () => {
+        const SDA_CONFIG = { apiKey: 'dummy-key' }
+
+        let SdaProtocolMock
+
+        beforeEach(() => {
+          SdaProtocolMock = jest.fn()
+
+          Object.setPrototypeOf(SdaProtocolMock.prototype, SdaProtocol.prototype)
+        })
+
+        test("should return the sda protocol registered for the account's blockchain and the given label", async () => {
+          wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+                    .registerProtocol('ethereum', 'test', SdaProtocolMock, SDA_CONFIG)
+
+          const account = await wdk.getAccount('ethereum', 0)
+
+          const protocol = account.getSdaProtocol('test')
+
+          expect(SdaProtocolMock).toHaveBeenCalledWith(account, SDA_CONFIG)
+
+          expect(protocol).toBeInstanceOf(SdaProtocolMock)
+        })
+
+        test('should return the sda protocol registered for the account and the given label', async () => {
+          wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+
+          const account = await wdk.getAccount('ethereum', 0)
+
+          account.registerProtocol('test', SdaProtocolMock, SDA_CONFIG)
+
+          const protocol = account.getSdaProtocol('test')
+
+          expect(SdaProtocolMock).toHaveBeenCalledWith(account, SDA_CONFIG)
+
+          expect(protocol).toBeInstanceOf(SdaProtocolMock)
+        })
+
+        test('should throw if no sda protocol has been registered for the given label', async () => {
+          wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+
+          const account = await wdk.getAccount('ethereum', 0)
+
+          expect(() => account.getSdaProtocol('test'))
+            .toThrow('No sda protocol registered for label: test.')
+        })
+
+        test('should preserve account-scoped protocols across repeated getAccount calls', async () => {
+          wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+
+          const account = await wdk.getAccount('ethereum', 0)
+          account.registerProtocol('test', SdaProtocolMock, SDA_CONFIG)
+
+          const sameAccount = await wdk.getAccount('ethereum', 0)
+
+          expect(sameAccount.getSdaProtocol('test')).toBeInstanceOf(SdaProtocolMock)
+        })
+      })
     })
   })
 
@@ -542,6 +601,54 @@ describe('WDK', () => {
 
           expect(() => account.getSwidgeProtocol('test'))
             .toThrow('No swidge protocol registered for label: test.')
+        })
+      })
+
+      describe('getSdaProtocol', () => {
+        const SDA_CONFIG = { apiKey: 'dummy-key' }
+
+        let SdaProtocolMock
+
+        beforeEach(() => {
+          SdaProtocolMock = jest.fn()
+
+          Object.setPrototypeOf(SdaProtocolMock.prototype, SdaProtocol.prototype)
+        })
+
+        test("should return the sda protocol registered for the account's blockchain and the given label", async () => {
+          wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+                    .registerProtocol('ethereum', 'test', SdaProtocolMock, SDA_CONFIG)
+
+          const account = await wdk.getAccountByPath('ethereum', "0'/0/0")
+
+          const protocol = account.getSdaProtocol('test')
+
+          expect(SdaProtocolMock).toHaveBeenCalledWith(account, SDA_CONFIG)
+
+          expect(protocol).toBeInstanceOf(SdaProtocolMock)
+        })
+
+        test('should return the sda protocol registered for the account and the given label', async () => {
+          wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+
+          const account = await wdk.getAccountByPath('ethereum', "0'/0/0")
+
+          account.registerProtocol('test', SdaProtocolMock, SDA_CONFIG)
+
+          const protocol = account.getSdaProtocol('test')
+
+          expect(SdaProtocolMock).toHaveBeenCalledWith(account, SDA_CONFIG)
+
+          expect(protocol).toBeInstanceOf(SdaProtocolMock)
+        })
+
+        test('should throw if no sda protocol has been registered for the given label', async () => {
+          wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+
+          const account = await wdk.getAccountByPath('ethereum', "0'/0/0")
+
+          expect(() => account.getSdaProtocol('test'))
+            .toThrow('No sda protocol registered for label: test.')
         })
       })
     })

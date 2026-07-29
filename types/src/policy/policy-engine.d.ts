@@ -65,7 +65,7 @@ export type PolicyScope = "project" | "account";
  * A wrapped operation name from the supported set, or `*` to match any wrapped operation.
  * Each name must match an actual method on `IWalletAccount` or a registered protocol.
  */
-export type PolicyOperation = "sendTransaction" | "signTransaction" | "transfer" | "approve" | "sign" | "signTypedData" | "signAuthorization" | "delegate" | "revokeDelegation" | "swap" | "bridge" | "supply" | "withdraw" | "borrow" | "repay" | "buy" | "sell" | "swidge" | "*";
+export type PolicyOperation = "sendTransaction" | "signTransaction" | "transfer" | "approve" | "sign" | "signTypedData" | "signAuthorization" | "delegate" | "revokeDelegation" | "swap" | "bridge" | "supply" | "withdraw" | "borrow" | "repay" | "buy" | "sell" | "swidge" | "createDepositAddress" | "renewDepositAddress" | "recoverDepositAddress" | "disableDepositAddress" | "*";
 /**
  * The frozen context object passed to every condition function during evaluation.
  */

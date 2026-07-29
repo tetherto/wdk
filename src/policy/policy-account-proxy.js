@@ -27,7 +27,8 @@ const PROTOCOL_GETTERS = [
   ['getBridgeProtocol', 'bridge'],
   ['getLendingProtocol', 'lending'],
   ['getFiatProtocol', 'fiat'],
-  ['getSwidgeProtocol', 'swidge']
+  ['getSwidgeProtocol', 'swidge'],
+  ['getSdaProtocol', 'sda']
 ]
 
 /**

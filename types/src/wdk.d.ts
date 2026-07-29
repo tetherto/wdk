@@ -1,24 +1,3 @@
-/** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
-/** @typedef {import('@tetherto/wdk-wallet').FeeRates} FeeRates */
-/** @typedef {import('./wallet-account-with-protocols.js').IWalletAccountWithProtocols} IWalletAccountWithProtocols */
-/**
- * The shape returned by `getAccount` / `getAccountByPath`: the underlying
- * IWalletAccount (sendTransaction, signTransaction, transfer, approve,
- * sign, …) plus the protocol-getter surface added by the WDK at account
- * retrieval time. Concrete wallet packages may further extend this shape.
- *
- * @typedef {IWalletAccount & IWalletAccountWithProtocols} WdkAccount
- */
-/** @typedef {<A extends IWalletAccount>(account: A) => Promise<void>} MiddlewareFunction */
-/** @typedef {import('./policy/policy-engine.js').Policy} Policy */
-/** @typedef {import('./policy/policy-engine.js').PolicyRule} PolicyRule */
-/** @typedef {import('./policy/policy-engine.js').PolicyCondition} PolicyCondition */
-/** @typedef {import('./policy/policy-engine.js').PolicyContext} PolicyContext */
-/** @typedef {import('./policy/policy-engine.js').PolicyAction} PolicyAction */
-/** @typedef {import('./policy/policy-engine.js').PolicyScope} PolicyScope */
-/** @typedef {import('./policy/policy-engine.js').PolicyOperation} PolicyOperation */
-/** @typedef {import('./policy/policy-engine.js').SimulationResult} SimulationResult */
-/** @typedef {import('./policy/policy-engine.js').RegisterPolicyOptions} RegisterPolicyOptions */
 export default class WDK {
     /**
      * Returns a random BIP-39 seed phrase.
@@ -63,7 +42,7 @@ export default class WDK {
      * @returns {WDK} The WDK.
      * @throws {Error} If a wallet is already registered for the given blockchain.
      */
-    registerWallet<W extends typeof import("@tetherto/wdk-wallet").default>(blockchain: string, WalletManager: W, config: ConstructorParameters<W>[1]): WDK;
+    registerWallet<W extends typeof WalletManager>(blockchain: string, WalletManager: W, config: ConstructorParameters<W>[1]): WDK;
     /**
      * Registers a new protocol to the WDK.
      *
@@ -71,14 +50,14 @@ export default class WDK {
      * same type bound to the same blockchain with the same label).
      *
      * @see {@link IWalletAccountWithProtocols#registerProtocol} to register protocols only for specific accounts.
-     * @template {typeof SwapProtocol | typeof BridgeProtocol | typeof LendingProtocol | typeof FiatProtocol | typeof SwidgeProtocol} P
+     * @template {typeof SwapProtocol | typeof BridgeProtocol | typeof LendingProtocol | typeof FiatProtocol | typeof SwidgeProtocol | typeof SdaProtocol} P
      * @param {string} blockchain - The name of the blockchain the protocol must be bound to. Can be any string (e.g., "ethereum").
      * @param {string} label - The label.
      * @param {P} Protocol - The protocol class.
      * @param {ConstructorParameters<P>[1]} config - The protocol configuration.
      * @returns {WDK} The WDK.
      */
-    registerProtocol<P extends typeof SwapProtocol | typeof BridgeProtocol | typeof LendingProtocol | typeof FiatProtocol | typeof SwidgeProtocol>(blockchain: string, label: string, Protocol: P, config: ConstructorParameters<P>[1]): WDK;
+    registerProtocol<P extends typeof SwapProtocol | typeof BridgeProtocol | typeof LendingProtocol | typeof FiatProtocol | typeof SwidgeProtocol | typeof SdaProtocol>(blockchain: string, label: string, Protocol: P, config: ConstructorParameters<P>[1]): WDK;
     /**
      * Registers a new middleware to the WDK.
      *
@@ -170,8 +149,10 @@ export type PolicyScope = import("./policy/policy-engine.js").PolicyScope;
 export type PolicyOperation = import("./policy/policy-engine.js").PolicyOperation;
 export type SimulationResult = import("./policy/policy-engine.js").SimulationResult;
 export type RegisterPolicyOptions = import("./policy/policy-engine.js").RegisterPolicyOptions;
+import WalletManager from '@tetherto/wdk-wallet';
 import { SwapProtocol } from '@tetherto/wdk-wallet/protocols';
 import { BridgeProtocol } from '@tetherto/wdk-wallet/protocols';
 import { LendingProtocol } from '@tetherto/wdk-wallet/protocols';
 import { FiatProtocol } from '@tetherto/wdk-wallet/protocols';
 import { SwidgeProtocol } from '@tetherto/wdk-wallet/protocols';
+import { SdaProtocol } from '@tetherto/wdk-wallet/protocols';

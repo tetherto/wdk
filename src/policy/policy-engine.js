@@ -19,6 +19,7 @@ import { PolicyConfigurationError } from './policy-error.js'
 import { evaluate } from './policy-evaluator.js'
 import PolicyRegistry from './policy-registry.js'
 import {
+  validateEngineOptions,
   validatePolicy,
   validateRegisterOptions
 } from './policy-validators.js'
@@ -78,7 +79,7 @@ import {
  * @property {PolicyOperation | PolicyOperation[]} operation - The wrapped operation(s) this rule addresses. May be a single operation name, an array, or the wildcard `*`.
  * @property {PolicyAction} action - Whether a matching rule allows or denies the operation.
  * @property {boolean} [override_broader_scope] - When true on an account-scope ALLOW rule that matches, the rule's verdict short-circuits project-scope evaluation. Account-scope rules are evaluated in registration order; the first matching override-flag rule wins. Only valid on account-scope ALLOW rules.
- * @property {PolicyCondition[]} conditions - Functions evaluated in order; all must return truthy for the rule to match. Each is raced against `conditionTimeoutMs`.
+ * @property {PolicyCondition[]} conditions - Functions evaluated in order; all must return truthy for the rule to match. Each is raced against the `conditionTimeoutMs` its own policy was registered with.
  * @property {Record<string, unknown>} [state] - Reserved for future use; currently ignored at runtime.
  * @property {(c: PolicyContext) => void | Promise<void>} [onSuccess] - Reserved for future use; currently ignored at runtime.
  */
@@ -105,12 +106,19 @@ import {
  */
 
 /**
- * Engine-wide settings supplied to `registerPolicy` (e.g. per-condition
- * timeout). The most recent call's value wins.
+ * Settings supplied to `registerPolicy`, scoped to the policies that call
+ * registers. Other policies are unaffected.
  *
  * @typedef {Object} RegisterPolicyOptions
  * @property {Record<string, unknown>} [state] - Reserved for future use; currently ignored at runtime.
- * @property {number} [conditionTimeoutMs] - Per-condition evaluation timeout in milliseconds. Defaults to 30000. A condition that exceeds the timeout is treated the same as a throw — fail-closed for DENY rules, fail-open-as-no-match for ALLOW rules. Engine-wide; the most recent registerPolicy call's value wins.
+ * @property {number} [conditionTimeoutMs] - Per-condition evaluation timeout in milliseconds, applied to every policy this call registers. Defaults to 30000. Values above the engine's `maxConditionTimeoutMs` ceiling are capped to that ceiling. A condition that exceeds the timeout is treated the same as a throw — fail-closed for DENY rules, fail-open-as-no-match for ALLOW rules.
+ */
+
+/**
+ * Settings supplied to the `PolicyEngine` constructor.
+ *
+ * @typedef {Object} PolicyEngineOptions
+ * @property {number} [maxConditionTimeoutMs] - Upper bound, in milliseconds, on the per-condition timeout any single policy can be given. Defaults to 30000. A policy registered with a larger `conditionTimeoutMs` is capped to this value rather than rejected.
  */
 
 /**
@@ -161,21 +169,32 @@ import {
 
 const DEFAULT_CONDITION_TIMEOUT_MS = 30_000
 
+const DEFAULT_MAX_CONDITION_TIMEOUT_MS = 30_000
+
 /**
  * The orchestration façade. Owns the registry; exposes the two methods the
  * `WDK` class calls (`register`, `applyPoliciesTo`). Internal helpers
  * (`_isGoverned`, `_evaluateContext`, `_simulateContext`) are used by the
  * wrapper module.
  *
+ * Each registered policy carries the condition timeout it was registered
+ * with; the engine only owns the ceiling that timeout is clamped to.
+ *
  * @internal
  */
 export default class PolicyEngine {
-  constructor () {
+  /**
+   * @param {PolicyEngineOptions} [options] - Engine-level settings such as `maxConditionTimeoutMs`.
+   * @throws {PolicyConfigurationError} If `options` is not a plain object or `maxConditionTimeoutMs` is not a finite positive number.
+   */
+  constructor (options) {
+    validateEngineOptions(options)
+
     /** @private */
     this._registry = new PolicyRegistry()
 
     /** @private */
-    this._conditionTimeoutMs = DEFAULT_CONDITION_TIMEOUT_MS
+    this._maxConditionTimeoutMs = options?.maxConditionTimeoutMs ?? DEFAULT_MAX_CONDITION_TIMEOUT_MS
   }
 
   /**
@@ -184,7 +203,7 @@ export default class PolicyEngine {
    * never leaves the engine partially mutated.
    *
    * @param {Policy | Policy[]} policies - A single policy or array of policies to register.
-   * @param {RegisterPolicyOptions} [options] - Engine-level settings such as `conditionTimeoutMs`.
+   * @param {RegisterPolicyOptions} [options] - Settings applied to the policies this call registers, such as `conditionTimeoutMs`.
    * @param {RegistrationContext} [registrationContext] - Optional set of registered wallet identifiers. When provided, the engine verifies every wallet binding referenced by the policies is in the set before touching the registry.
    * @throws {PolicyConfigurationError} If any policy or option fails schema validation, the input is an empty array, or a policy binds to a wallet not present in `registrationContext.knownWallets`.
    */
@@ -213,13 +232,14 @@ export default class PolicyEngine {
       }
     }
 
-    list.forEach((policy, i) => {
-      this._registry.add(policy, walletsPerPolicy[i])
-    })
+    const conditionTimeoutMs = Math.min(
+      options?.conditionTimeoutMs ?? DEFAULT_CONDITION_TIMEOUT_MS,
+      this._maxConditionTimeoutMs
+    )
 
-    if (options?.conditionTimeoutMs !== undefined) {
-      this._conditionTimeoutMs = options.conditionTimeoutMs
-    }
+    list.forEach((policy, i) => {
+      this._registry.add(policy, walletsPerPolicy[i], conditionTimeoutMs)
+    })
   }
 
   /**
@@ -264,7 +284,7 @@ export default class PolicyEngine {
   async _evaluateContext (context, { path, index }) {
     const groups = this._registry.applicable(context.wallet, path, index)
 
-    return evaluate(context, groups, { conditionTimeoutMs: this._conditionTimeoutMs })
+    return evaluate(context, groups)
   }
 
   /** @private */

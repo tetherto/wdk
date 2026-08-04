@@ -17,9 +17,11 @@ export default class WDK {
      * Creates a new WDK.
      *
      * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase.
+     * @param {WdkOptions} [options] - Instance-level settings such as `maxConditionTimeoutMs`.
      * @throws {Error} If the seed is not valid.
+     * @throws {PolicyConfigurationError} If `options` is not a plain object or `maxConditionTimeoutMs` is not a finite positive number.
      */
-    constructor(seed: string | Uint8Array);
+    constructor(seed: string | Uint8Array, options?: WdkOptions);
     /** @private */
     private _seed;
     /** @private */
@@ -83,7 +85,7 @@ export default class WDK {
      * registered twice into the same binding, the second call replaces the first.
      *
      * @param {Policy | Policy[]} policies - A single policy or array of policies to register on this WDK instance.
-     * @param {RegisterPolicyOptions} [options] - Engine-level settings such as `conditionTimeoutMs`. The most recent call's value wins.
+     * @param {RegisterPolicyOptions} [options] - Settings applied to the policies this call registers, such as `conditionTimeoutMs`. They do not affect policies registered by other calls.
      * @returns {WDK} The same WDK instance, for chaining.
      * @throws {PolicyConfigurationError} If any policy or option fails validation, or a policy binds to a wallet identifier not previously passed to `registerWallet`.
      */
@@ -149,6 +151,15 @@ export type PolicyScope = import("./policy/policy-engine.js").PolicyScope;
 export type PolicyOperation = import("./policy/policy-engine.js").PolicyOperation;
 export type SimulationResult = import("./policy/policy-engine.js").SimulationResult;
 export type RegisterPolicyOptions = import("./policy/policy-engine.js").RegisterPolicyOptions;
+/**
+ * Instance-level settings for a WDK.
+ */
+export type WdkOptions = {
+    /**
+     * - Upper bound, in milliseconds, on the per-condition timeout any single policy can be given through `registerPolicy`. Defaults to 30000. A policy registered with a larger `conditionTimeoutMs` is capped to this value rather than rejected.
+     */
+    maxConditionTimeoutMs?: number;
+};
 import WalletManager from '@tetherto/wdk-wallet';
 import { SwapProtocol } from '@tetherto/wdk-wallet/protocols';
 import { BridgeProtocol } from '@tetherto/wdk-wallet/protocols';

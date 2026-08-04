@@ -36,6 +36,9 @@
  * Different bindings (same id under wallet A vs wallet B vs project) are
  * independent records.
  *
+ * Every stored record carries the condition timeout it was registered with,
+ * so the evaluator can race each policy's conditions against its own budget.
+ *
  * @internal
  */
 export default class PolicyRegistry {
@@ -59,9 +62,12 @@ export default class PolicyRegistry {
    *
    * @param {Policy} policy - The policy to clone and store.
    * @param {string[] | undefined} wallets - Wallet identifiers the policy binds to. Required for account-scope; undefined for global project-scope.
+   * @param {number} conditionTimeoutMs - The effective per-condition timeout, in milliseconds, this policy's conditions are raced against. Already clamped to the engine ceiling by the caller.
    */
-  add (policy, wallets) {
+  add (policy, wallets, conditionTimeoutMs) {
     const cloned = clonePolicy(policy)
+
+    cloned._conditionTimeoutMs = conditionTimeoutMs
 
     if (cloned.scope === 'project') {
       // Tag the cloned policy with its wallet restriction for later filtering.

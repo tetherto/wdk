@@ -3,6 +3,7 @@ export type IWalletAccount = import("./src/wdk.js").IWalletAccount;
 export type IWalletAccountReadOnly = import("@tetherto/wdk-wallet").IWalletAccountReadOnly;
 export type FeeRates = import("./src/wdk.js").FeeRates;
 export type MiddlewareFunction = import("./src/wdk.js").MiddlewareFunction;
+export type WdkOptions = import("./src/wdk.js").WdkOptions;
 export type IWalletAccountWithProtocols = import("./src/wallet-account-with-protocols.js").IWalletAccountWithProtocols;
 export type WdkAccount = import("./src/wdk.js").WdkAccount;
 export type Policy = import("./src/policy/index.js").Policy;

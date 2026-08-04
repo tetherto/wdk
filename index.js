@@ -18,6 +18,7 @@
 /** @typedef {import('@tetherto/wdk-wallet').IWalletAccountReadOnly} IWalletAccountReadOnly */
 /** @typedef {import('./src/wdk.js').FeeRates} FeeRates */
 /** @typedef {import('./src/wdk.js').MiddlewareFunction} MiddlewareFunction */
+/** @typedef {import('./src/wdk.js').WdkOptions} WdkOptions */
 
 /** @typedef {import('./src/wallet-account-with-protocols.js').IWalletAccountWithProtocols} IWalletAccountWithProtocols */
 /** @typedef {import('./src/wdk.js').WdkAccount} WdkAccount */

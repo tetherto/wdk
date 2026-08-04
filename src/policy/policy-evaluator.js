@@ -21,14 +21,6 @@ import { ruleAddressesOperation } from './policy-validators.js'
 /** @typedef {import('./policy-registry.js').PolicyGroups} PolicyGroups */
 
 /**
- * Engine-wide settings the evaluator needs at runtime (currently only
- * the per-condition timeout).
- *
- * @typedef {Object} EvaluateOptions
- * @property {number} conditionTimeoutMs - Per-condition timeout in milliseconds.
- */
-
-/**
  * The internal verdict produced by `evaluate()`: ALLOW or BLOCK, plus
  * the identifying triple and a per-rule trace.
  *
@@ -47,11 +39,10 @@ import { ruleAddressesOperation } from './policy-validators.js'
  *
  * @internal
  * @param {PolicyContext} context - The frozen context built for this call.
- * @param {PolicyGroups} groups - Pre-filtered policies applicable to the (wallet, path, index) tuple, partitioned by scope.
- * @param {EvaluateOptions} options - Engine-wide evaluation settings.
+ * @param {PolicyGroups} groups - Pre-filtered policies applicable to the (wallet, path, index) tuple, partitioned by scope. Each carries the condition timeout it was registered with.
  * @returns {Promise<Verdict>} The verdict, including a trace of all rules considered.
  */
-export async function evaluate (context, groups, options) {
+export async function evaluate (context, groups) {
   const trace = []
 
   const anyAddresses =
@@ -72,12 +63,12 @@ export async function evaluate (context, groups, options) {
 
   const recordedAllows = []
 
-  const a = await evalGroup(groups.account, context, trace, 'account', { allowOverride: true, ...options })
+  const a = await evalGroup(groups.account, context, trace, 'account', { allowOverride: true })
   if (a.kind === 'DENY') return makeBlock(a.policyId, a.ruleName, a.reason, trace)
   if (a.kind === 'ALLOW_FINAL') return makeAllow(a.policyId, a.ruleName, 'override', trace)
   recordedAllows.push(...a.allows)
 
-  const c = await evalGroup(groups.project, context, trace, 'project', { allowOverride: false, ...options })
+  const c = await evalGroup(groups.project, context, trace, 'project', { allowOverride: false })
   if (c.kind === 'DENY') return makeBlock(c.policyId, c.ruleName, c.reason, trace)
   recordedAllows.push(...c.allows)
 
@@ -100,10 +91,12 @@ function addresses (policies, operation) {
   return false
 }
 
-async function evalGroup (policies, context, trace, scope, { allowOverride, conditionTimeoutMs }) {
+async function evalGroup (policies, context, trace, scope, { allowOverride }) {
   const allows = []
 
   for (const policy of policies) {
+    const conditionTimeoutMs = policy._conditionTimeoutMs
+
     for (const rule of policy.rules) {
       if (!ruleAddressesOperation(rule, context.operation)) continue
 
@@ -154,8 +147,9 @@ async function evalGroup (policies, context, trace, scope, { allowOverride, cond
  *     backing service (e.g. KYT lookup) to throw — when uncertainty
  *     surrounds a deny, block.
  *
- * Each condition is also raced against `conditionTimeoutMs`. A timeout is
- * surfaced as a throw and follows the same fail-mode rules above.
+ * Each condition is also raced against the timeout its owning policy was
+ * registered with. A timeout is surfaced as a throw and follows the same
+ * fail-mode rules above.
  */
 async function evalConditions (conditions, context, { conditionTimeoutMs, failClose }) {
   for (const condition of conditions) {

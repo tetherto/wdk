@@ -4,20 +4,28 @@
  * (`_isGoverned`, `_evaluateContext`, `_simulateContext`) are used by the
  * wrapper module.
  *
+ * Each registered policy carries the condition timeout it was registered
+ * with; the engine only owns the ceiling that timeout is clamped to.
+ *
  * @internal
  */
 export default class PolicyEngine {
+    /**
+     * @param {PolicyEngineOptions} [options] - Engine-level settings such as `maxConditionTimeoutMs`.
+     * @throws {PolicyConfigurationError} If `options` is not a plain object or `maxConditionTimeoutMs` is not a finite positive number.
+     */
+    constructor(options?: PolicyEngineOptions);
     /** @private */
     private _registry;
     /** @private */
-    private _conditionTimeoutMs;
+    private _maxConditionTimeoutMs;
     /**
      * Registers one or more policies. Synchronously throws on validation failures.
      * Validation runs to completion before any registry mutation, so a failure
      * never leaves the engine partially mutated.
      *
      * @param {Policy | Policy[]} policies - A single policy or array of policies to register.
-     * @param {RegisterPolicyOptions} [options] - Engine-level settings such as `conditionTimeoutMs`.
+     * @param {RegisterPolicyOptions} [options] - Settings applied to the policies this call registers, such as `conditionTimeoutMs`.
      * @param {RegistrationContext} [registrationContext] - Optional set of registered wallet identifiers. When provided, the engine verifies every wallet binding referenced by the policies is in the set before touching the registry.
      * @throws {PolicyConfigurationError} If any policy or option fails schema validation, the input is an empty array, or a policy binds to a wallet not present in `registrationContext.knownWallets`.
      */
@@ -123,7 +131,7 @@ export type PolicyRule = {
      */
     override_broader_scope?: boolean;
     /**
-     * - Functions evaluated in order; all must return truthy for the rule to match. Each is raced against `conditionTimeoutMs`.
+     * - Functions evaluated in order; all must return truthy for the rule to match. Each is raced against the `conditionTimeoutMs` its own policy was registered with.
      */
     conditions: PolicyCondition[];
     /**
@@ -172,8 +180,8 @@ export type Policy = {
     rules: PolicyRule[];
 };
 /**
- * Engine-wide settings supplied to `registerPolicy` (e.g. per-condition
- * timeout). The most recent call's value wins.
+ * Settings supplied to `registerPolicy`, scoped to the policies that call
+ * registers. Other policies are unaffected.
  */
 export type RegisterPolicyOptions = {
     /**
@@ -181,9 +189,18 @@ export type RegisterPolicyOptions = {
      */
     state?: Record<string, unknown>;
     /**
-     * - Per-condition evaluation timeout in milliseconds. Defaults to 30000. A condition that exceeds the timeout is treated the same as a throw — fail-closed for DENY rules, fail-open-as-no-match for ALLOW rules. Engine-wide; the most recent registerPolicy call's value wins.
+     * - Per-condition evaluation timeout in milliseconds, applied to every policy this call registers. Defaults to 30000. Values above the engine's `maxConditionTimeoutMs` ceiling are capped to that ceiling. A condition that exceeds the timeout is treated the same as a throw — fail-closed for DENY rules, fail-open-as-no-match for ALLOW rules.
      */
     conditionTimeoutMs?: number;
+};
+/**
+ * Settings supplied to the `PolicyEngine` constructor.
+ */
+export type PolicyEngineOptions = {
+    /**
+     * - Upper bound, in milliseconds, on the per-condition timeout any single policy can be given. Defaults to 30000. A policy registered with a larger `conditionTimeoutMs` is capped to this value rather than rejected.
+     */
+    maxConditionTimeoutMs?: number;
 };
 /**
  * One row in a simulation trace: the rule that was evaluated, its scope,

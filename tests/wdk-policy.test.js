@@ -86,6 +86,30 @@ const projectDenyAll = (id) => ({
   rules: [{ name: `${id}-rule`, operation: 'sendTransaction', action: 'DENY', conditions: [] }]
 })
 
+const neverResolvingDeny = (id, operation) => ({
+  id,
+  name: id,
+  scope: 'project',
+  rules: [{
+    name: `${id}-rule`,
+    operation,
+    action: 'DENY',
+    conditions: [() => new Promise(() => {})]
+  }]
+})
+
+const slowAllow = (id, operation, delayMs) => ({
+  id,
+  name: id,
+  scope: 'project',
+  rules: [{
+    name: `${id}-rule`,
+    operation,
+    action: 'ALLOW',
+    conditions: [() => new Promise((resolve) => setTimeout(() => resolve(true), delayMs))]
+  }]
+})
+
 const catchAsync = async (fn) => {
   try { await fn(); return null } catch (err) { return err }
 }
@@ -2279,6 +2303,126 @@ describe('WDK — policy engine', () => {
       expect(result.hash).toBe(DUMMY_TX_HASH)
       expect(invoked).toBe(1)
       expect(sendTransactionMock).toHaveBeenCalledWith({ to: RECIPIENT, value: 1n })
+    })
+
+    test('each policy is raced against the conditionTimeoutMs it was registered with', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(neverResolvingDeny('fast', 'sendTransaction'), { conditionTimeoutMs: 25 })
+        .registerPolicy(neverResolvingDeny('slow', 'signTransaction'), { conditionTimeoutMs: 75 })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const fastErr = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+      const slowErr = await catchAsync(() => account.signTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(fastErr.reason).toBe('fast-rule (condition error: condition timed out after 25ms)')
+      expect(slowErr.reason).toBe('slow-rule (condition error: condition timed out after 75ms)')
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+      expect(signTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('the timeout applied to a policy is independent of registration order', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(neverResolvingDeny('slow', 'signTransaction'), { conditionTimeoutMs: 75 })
+        .registerPolicy(neverResolvingDeny('fast', 'sendTransaction'), { conditionTimeoutMs: 25 })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const fastErr = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+      const slowErr = await catchAsync(() => account.signTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(fastErr.reason).toBe('fast-rule (condition error: condition timed out after 25ms)')
+      expect(slowErr.reason).toBe('slow-rule (condition error: condition timed out after 75ms)')
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+      expect(signTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('a policy registered without conditionTimeoutMs keeps the default timeout when a later policy sets a shorter one', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(slowAllow('default-timeout', 'sendTransaction', 60))
+        .registerPolicy(slowAllow('short-timeout', 'signTransaction', 60), { conditionTimeoutMs: 25 })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const result = await account.sendTransaction({ to: RECIPIENT, value: 1n })
+      const err = await catchAsync(() => account.signTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(result.hash).toBe(DUMMY_TX_HASH)
+      expect(sendTransactionMock).toHaveBeenCalledWith({ to: RECIPIENT, value: 1n })
+      expect(err.reason).toBe('governed-but-unmatched')
+      expect(signTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('maxConditionTimeoutMs caps a policy that asks for a longer timeout', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      const cappedWdk = new WDK(SEED_PHRASE, { maxConditionTimeoutMs: 30 })
+
+      cappedWdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(neverResolvingDeny('over-ceiling', 'sendTransaction'), { conditionTimeoutMs: 5_000 })
+
+      const account = await cappedWdk.getAccount('ethereum', 0)
+      const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(err.reason).toBe('over-ceiling-rule (condition error: condition timed out after 30ms)')
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('maxConditionTimeoutMs caps the default timeout too', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      const cappedWdk = new WDK(SEED_PHRASE, { maxConditionTimeoutMs: 30 })
+
+      cappedWdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(neverResolvingDeny('no-timeout-option', 'sendTransaction'))
+
+      const account = await cappedWdk.getAccount('ethereum', 0)
+      const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(err.reason).toBe('no-timeout-option-rule (condition error: condition timed out after 30ms)')
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('a policy asking for less than the ceiling keeps its own timeout', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      const cappedWdk = new WDK(SEED_PHRASE, { maxConditionTimeoutMs: 5_000 })
+
+      cappedWdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy(neverResolvingDeny('under-ceiling', 'sendTransaction'), { conditionTimeoutMs: 25 })
+
+      const account = await cappedWdk.getAccount('ethereum', 0)
+      const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(err.reason).toBe('under-ceiling-rule (condition error: condition timed out after 25ms)')
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('rejects a non-positive maxConditionTimeoutMs at construction time', () => {
+      const cases = [
+        { value: -1, message: "WDK options: 'maxConditionTimeoutMs': Too small: expected number to be >0" },
+        { value: 0, message: "WDK options: 'maxConditionTimeoutMs': Too small: expected number to be >0" },
+        { value: NaN, message: "WDK options: 'maxConditionTimeoutMs': Invalid input: expected number, received NaN" },
+        { value: Infinity, message: "WDK options: 'maxConditionTimeoutMs': Invalid input: expected number, received number" },
+        { value: '30000', message: "WDK options: 'maxConditionTimeoutMs': Invalid input: expected number, received string" },
+        { value: null, message: "WDK options: 'maxConditionTimeoutMs': Invalid input: expected number, received null" }
+      ]
+
+      for (const { value, message } of cases) {
+        const err = catchSync(() => new WDK(SEED_PHRASE, { maxConditionTimeoutMs: value }))
+
+        expect(err.name).toBe('PolicyConfigurationError')
+        expect(err.message).toBe(message)
+      }
     })
   })
 

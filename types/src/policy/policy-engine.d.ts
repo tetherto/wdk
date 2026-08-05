@@ -83,11 +83,7 @@ export type PolicyContext = {
      */
     account: IWalletAccountReadOnly;
     /**
-     * - The first argument to the wrapped method.
-     */
-    params: unknown;
-    /**
-     * - The full argument array.
+     * - The full argument array the wrapped method was called with, snapshotted at evaluation time. `args[0]` is the first argument; every element is readable, so multi-argument operations (e.g. `swidge(options, config)`) can be gated on any of them.
      */
     args: readonly unknown[];
 };

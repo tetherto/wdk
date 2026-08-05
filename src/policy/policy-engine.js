@@ -56,8 +56,7 @@ import {
  * @property {PolicyOperation} operation - The intercepted operation name.
  * @property {string} wallet - The wallet identifier (the same string passed to `wdk.registerWallet`). Despite the name, this is an opaque key chosen by the consumer — it might be a chain name like `"ethereum"`, but it could equally be `"treasury-cold"` or any other label.
  * @property {IWalletAccountReadOnly} account - A read-only view of the wallet account.
- * @property {unknown} params - The first argument to the wrapped method.
- * @property {readonly unknown[]} args - The full argument array.
+ * @property {readonly unknown[]} args - The full argument array the wrapped method was called with, snapshotted at evaluation time. `args[0]` is the first argument; every element is readable, so multi-argument operations (e.g. `swidge(options, config)`) can be gated on any of them.
  */
 
 /**

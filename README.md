@@ -110,9 +110,12 @@ Arguments are read positionally through `args`, which works for every operation 
 // sendTransaction(tx) — the transaction is args[0]
 conditions: [({ args }) => BigInt(args[0].value) <= 10n ** 18n]
 
-// swidge(options, config) — gate on the second argument
-conditions: [({ args }) => args[1].slippage <= 0.05]
+// swidge(options, config) — slippage lives on options, the fee caps on config
+conditions: [({ args }) => args[0].slippage <= 0.05]
+conditions: [({ args }) => args[1] !== undefined && args[1].maxProtocolFeeBps <= 50]
 ```
+
+Index positionally against the operation's real signature, and remember that trailing arguments are often optional — `swidge`'s `config` is. Reading a field off an argument that wasn't passed throws, and reading one that lives on a different argument silently yields `undefined`, which compares falsy: either way the rule stops guarding what you think it guards. Check the argument exists before reaching into it.
 
 > **Breaking change:** `context.params`, a shortcut for `args[0]`, has been removed. It was invisible past the first argument, so multi-argument operations had to reach for `args` anyway. Migrate positional access to `args`:
 >

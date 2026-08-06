@@ -2182,17 +2182,17 @@ describe('WDK — policy engine', () => {
         .registerWallet('ethereum', WalletManagerMock, {})
         .registerProtocol('ethereum', 'bridge-and-swap', MySwidgeProtocol, {})
         .registerPolicy({
-          id: 'slippage-cap',
-          name: 'slippage-cap',
+          id: 'protocol-fee-cap',
+          name: 'protocol-fee-cap',
           scope: 'project',
           rules: [
             {
-              name: 'deny-high-slippage',
+              name: 'deny-uncapped-protocol-fee',
               operation: 'swidge',
               action: 'DENY',
               conditions: [({ args }) => {
                 observedArgs.push(args)
-                return args[1].slippage > 0.05
+                return args[1] === undefined || args[1].maxProtocolFeeBps > 50
               }]
             },
             { name: 'allow-swidge', operation: 'swidge', action: 'ALLOW', conditions: [] }
@@ -2203,18 +2203,22 @@ describe('WDK — policy engine', () => {
       const swidge = account.getSwidgeProtocol('bridge-and-swap')
 
       const options = { fromToken: 'A', toToken: 'B', fromTokenAmount: 1n }
-      const allowed = await swidge.swidge(options, { slippage: 0.01 })
-      const denied = await catchAsync(() => swidge.swidge(options, { slippage: 0.5 }))
+      const allowed = await swidge.swidge(options, { maxProtocolFeeBps: 25 })
+      const overCap = await catchAsync(() => swidge.swidge(options, { maxProtocolFeeBps: 500 }))
+      const noConfig = await catchAsync(() => swidge.swidge(options))
 
       expect(allowed).toEqual(DUMMY_SWIDGE_RESULT)
-      expect(denied.name).toBe('PolicyViolationError')
-      expect(denied.policyId).toBe('slippage-cap')
-      expect(denied.ruleName).toBe('deny-high-slippage')
+      expect(overCap.name).toBe('PolicyViolationError')
+      expect(overCap.policyId).toBe('protocol-fee-cap')
+      expect(overCap.ruleName).toBe('deny-uncapped-protocol-fee')
+      expect(noConfig.name).toBe('PolicyViolationError')
+      expect(noConfig.ruleName).toBe('deny-uncapped-protocol-fee')
       expect(swidgeInstanceMock).toHaveBeenCalledTimes(1)
-      expect(swidgeInstanceMock).toHaveBeenCalledWith(options, { slippage: 0.01 })
+      expect(swidgeInstanceMock).toHaveBeenCalledWith(options, { maxProtocolFeeBps: 25 })
       expect(observedArgs).toEqual([
-        [options, { slippage: 0.01 }],
-        [options, { slippage: 0.5 }]
+        [options, { maxProtocolFeeBps: 25 }],
+        [options, { maxProtocolFeeBps: 500 }],
+        [options]
       ])
     })
   })

@@ -217,6 +217,17 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
   return handle.proxy
 }
 
+/**
+ * Builds the enforced replacement for one wrapped method: evaluate first, then
+ * forward to the original only on ALLOW. This is the sole construction site of
+ * `PolicyViolationError` — the verdict's denial code rides along so the error
+ * can explain the default-deny paths and let consumers switch on them.
+ *
+ * @param {string} name - The operation name being wrapped.
+ * @param {Function} boundOriginal - The underlying method, pre-bound to its subject.
+ * @param {object} ctx - The per-account routing context shared by every wrapped method.
+ * @returns {Function} The enforced method, which throws {@link PolicyViolationError} on a BLOCK verdict and {@link PolicyConfigurationError} if an argument is not structured-cloneable.
+ */
 function buildEnforcedMethod (name, boundOriginal, ctx) {
   return async function policyEnforced (...args) {
     const forwardedArgs = snapshotArgs(args, name)
@@ -234,7 +245,8 @@ function buildEnforcedMethod (name, boundOriginal, ctx) {
       throw new PolicyViolationError({
         policyId: verdict.policyId ?? '<unknown>',
         ruleName: verdict.ruleName ?? '<unknown>',
-        reason: verdict.reason ?? 'unknown'
+        reason: verdict.reason ?? 'unknown',
+        code: verdict.code
       })
     }
 

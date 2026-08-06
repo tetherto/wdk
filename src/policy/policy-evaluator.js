@@ -14,10 +14,12 @@
 
 'use strict'
 
+import { DENIAL_CODES } from './constants.js'
 import { ruleAddressesOperation } from './policy-validators.js'
 
 /** @typedef {import('./policy-engine.js').PolicyContext} PolicyContext */
 /** @typedef {import('./policy-engine.js').SimulationTraceEntry} SimulationTraceEntry */
+/** @typedef {import('./policy-error.js').DenialCode} DenialCode */
 /** @typedef {import('./policy-registry.js').PolicyGroups} PolicyGroups */
 
 /**
@@ -29,6 +31,7 @@ import { ruleAddressesOperation } from './policy-validators.js'
  * @property {string | null} policyId - Id of the policy that produced the verdict, or null when no rule addresses the operation (`no-applicable-rule`) or matched (`governed-but-unmatched`).
  * @property {string | null} ruleName - Name of the rule that matched, or null.
  * @property {string | null} reason - Human-readable reason (rule.reason or one of `matched` / `override` / `no-applicable-rule` / `governed-but-unmatched`).
+ * @property {DenialCode | null} code - Which denial path produced a BLOCK, or null on ALLOW.
  * @property {SimulationTraceEntry[]} trace - Per-rule evaluation outcomes in order.
  */
 
@@ -58,18 +61,18 @@ export async function evaluate (context, groups) {
   // To opt back into permissive semantics, register a wildcard ALLOW:
   //   { operation: '*', action: 'ALLOW', conditions: [] }
   if (!anyAddresses) {
-    return makeBlock(null, null, 'no-applicable-rule', trace)
+    return makeBlock(null, null, 'no-applicable-rule', DENIAL_CODES.NO_APPLICABLE_RULE, trace)
   }
 
   const recordedAllows = []
 
   const a = await evalGroup(groups.account, context, trace, 'account', { allowOverride: true })
-  if (a.kind === 'DENY') return makeBlock(a.policyId, a.ruleName, a.reason, trace)
+  if (a.kind === 'DENY') return makeBlock(a.policyId, a.ruleName, a.reason, DENIAL_CODES.RULE_DENIED, trace)
   if (a.kind === 'ALLOW_FINAL') return makeAllow(a.policyId, a.ruleName, 'override', trace)
   recordedAllows.push(...a.allows)
 
   const c = await evalGroup(groups.project, context, trace, 'project', { allowOverride: false })
-  if (c.kind === 'DENY') return makeBlock(c.policyId, c.ruleName, c.reason, trace)
+  if (c.kind === 'DENY') return makeBlock(c.policyId, c.ruleName, c.reason, DENIAL_CODES.RULE_DENIED, trace)
   recordedAllows.push(...c.allows)
 
   if (recordedAllows.length > 0) {
@@ -78,7 +81,7 @@ export async function evaluate (context, groups) {
     return makeAllow(first.policyId, first.ruleName, 'matched', trace)
   }
 
-  return makeBlock(null, null, 'governed-but-unmatched', trace)
+  return makeBlock(null, null, 'governed-but-unmatched', DENIAL_CODES.GOVERNED_BUT_UNMATCHED, trace)
 }
 
 function addresses (policies, operation) {
@@ -184,9 +187,9 @@ async function withTimeout (promise, ms) {
 }
 
 function makeAllow (policyId, ruleName, reason, trace) {
-  return { outcome: 'ALLOW', policyId, ruleName, reason, trace }
+  return { outcome: 'ALLOW', policyId, ruleName, reason, code: null, trace }
 }
 
-function makeBlock (policyId, ruleName, reason, trace) {
-  return { outcome: 'BLOCK', policyId, ruleName, reason, trace }
+function makeBlock (policyId, ruleName, reason, code, trace) {
+  return { outcome: 'BLOCK', policyId, ruleName, reason, code, trace }
 }

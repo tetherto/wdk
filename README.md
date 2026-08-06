@@ -129,7 +129,7 @@ Index positionally against the operation's real signature, and remember that tra
 
 ### Default-deny semantics
 
-The engine is **default-deny on governed accounts**. As soon as any policy applies to an account, the engine wraps every method in `OPERATIONS` (the set of write-facing and signing primitives — `sendTransaction`, `signTransaction`, `transfer`, `approve`, `sign`, `signTypedData`, `signAuthorization`, `delegate`, `revokeDelegation`, and protocol methods like `swap`, `bridge`, `swidge`, etc.) on that account. Any call to a wrapped method whose operation is not addressed by an `ALLOW` rule throws `PolicyViolationError` with `reason: 'no-applicable-rule'`.
+The engine is **default-deny on governed accounts**. As soon as any policy applies to an account, the engine wraps every method in `OPERATIONS` (the set of write-facing and signing primitives — `sendTransaction`, `signTransaction`, `transfer`, `approve`, `sign`, `signTypedData`, `signAuthorization`, `delegate`, `revokeDelegation`, and protocol methods like `swap`, `bridge`, `swidge`, etc.) on that account. Any call to a wrapped method whose operation is not addressed by an `ALLOW` rule throws `PolicyViolationError` with `code: 'NO_APPLICABLE_RULE'`.
 
 This is intentional: a "cap transfer at $100" policy must not be sidesteppable by `sendTransaction({ to: token, data: <ERC-20 transfer calldata> })`, `approve(spender, MAX)`, an off-chain `signTypedData` Permit, or an ERC-7702 `delegate` to an attacker contract. The engine closes those bypasses by treating any unaddressed money-movement op on a governed account as DENY.
 
@@ -147,6 +147,28 @@ wdk.registerPolicy({
 ```
 
 Accounts that have **no** registered policies are not governed — the proxy is not applied, and method calls go straight to the underlying account at zero cost.
+
+#### Telling the denial paths apart
+
+`PolicyViolationError` carries a machine-readable `code` alongside the human-readable `reason`. Branch on `code` — `reason` holds your own rule text when a rule fires, so it isn't a stable discriminator:
+
+| `code` | What happened |
+| --- | --- |
+| `RULE_DENIED` | A `DENY` rule matched. `policyId` and `ruleName` identify it; `reason` is the rule's `reason` (or its name). |
+| `NO_APPLICABLE_RULE` | No registered rule addresses this operation at all — the default-deny case above. |
+| `GOVERNED_BUT_UNMATCHED` | Rules address the operation, but none of their conditions matched. |
+
+```javascript
+try {
+  await account.swap({ /* … */ })
+} catch (err) {
+  if (err.code === 'NO_APPLICABLE_RULE') {
+    // Nothing allows swaps yet — add a rule or a catch-all baseline.
+  }
+}
+```
+
+Both default-deny codes produce an error message that names the cause, explains why the engine denies unmatched operations, and includes the catch-all snippet above ready to paste. A `RULE_DENIED` error keeps the terse `Policy violation: <policy>/<rule>: <reason>` form — you wrote that rule and know what it means.
 
 The engine wraps accounts through an ES `Proxy` so internal SDK code that uses `this.method()` naturally bypasses enforcement — nested-call escape (e.g. `bridge` internally calling `sendTransaction`) works without any async-context tracking. The same code path runs on every JavaScript runtime that supports `Proxy`, including Bare.
 

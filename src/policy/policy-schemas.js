@@ -95,6 +95,14 @@ export const registerOptionsSchema = z.object({
 }).optional()
 
 /**
+ * Zod schema for the optional engine options bag accepted by the `WDK`
+ * and `PolicyEngine` constructors.
+ */
+export const engineOptionsSchema = z.object({
+  maxConditionTimeoutMs: z.number().finite().positive().optional()
+}).optional()
+
+/**
  * Normalises the wallet field of a parsed policy into an array of
  * non-empty strings or `undefined` (meaning "apply to every registered wallet").
  *
@@ -149,8 +157,24 @@ export function formatPolicyError (zodError, policy) {
  * @returns {string} A human-readable message prefixed with `registerPolicy options`.
  */
 export function formatRegisterOptionsError (zodError) {
+  return formatOptionsError(zodError, 'registerPolicy options')
+}
+
+/**
+ * Builds a human-readable message for the first issue in a ZodError thrown
+ * by the engine options schema.
+ *
+ * @internal
+ * @param {ZodError} zodError - The error returned by `engineOptionsSchema.safeParse`.
+ * @returns {string} A human-readable message prefixed with `WDK options`.
+ */
+export function formatEngineOptionsError (zodError) {
+  return formatOptionsError(zodError, 'WDK options')
+}
+
+function formatOptionsError (zodError, prefix) {
   const issue = zodError.issues[0]
   const pathStr = issue.path.join('.')
 
-  return `registerPolicy options${pathStr ? `: '${pathStr}'` : ''}: ${issue.message}`
+  return `${prefix}${pathStr ? `: '${pathStr}'` : ''}: ${issue.message}`
 }

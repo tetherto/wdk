@@ -2,13 +2,6 @@
 /** @typedef {import('./policy-engine.js').SimulationTraceEntry} SimulationTraceEntry */
 /** @typedef {import('./policy-registry.js').PolicyGroups} PolicyGroups */
 /**
- * Engine-wide settings the evaluator needs at runtime (currently only
- * the per-condition timeout).
- *
- * @typedef {Object} EvaluateOptions
- * @property {number} conditionTimeoutMs - Per-condition timeout in milliseconds.
- */
-/**
  * The internal verdict produced by `evaluate()`: ALLOW or BLOCK, plus
  * the identifying triple and a per-rule trace.
  *
@@ -26,24 +19,13 @@
  *
  * @internal
  * @param {PolicyContext} context - The frozen context built for this call.
- * @param {PolicyGroups} groups - Pre-filtered policies applicable to the (wallet, path, index) tuple, partitioned by scope.
- * @param {EvaluateOptions} options - Engine-wide evaluation settings.
+ * @param {PolicyGroups} groups - Pre-filtered policies applicable to the (wallet, path, index) tuple, partitioned by scope. Each carries the condition timeout it was registered with.
  * @returns {Promise<Verdict>} The verdict, including a trace of all rules considered.
  */
-export function evaluate(context: PolicyContext, groups: PolicyGroups, options: EvaluateOptions): Promise<Verdict>;
+export function evaluate(context: PolicyContext, groups: PolicyGroups): Promise<Verdict>;
 export type PolicyContext = import("./policy-engine.js").PolicyContext;
 export type SimulationTraceEntry = import("./policy-engine.js").SimulationTraceEntry;
 export type PolicyGroups = import("./policy-registry.js").PolicyGroups;
-/**
- * Engine-wide settings the evaluator needs at runtime (currently only
- * the per-condition timeout).
- */
-export type EvaluateOptions = {
-    /**
-     * - Per-condition timeout in milliseconds.
-     */
-    conditionTimeoutMs: number;
-};
 /**
  * The internal verdict produced by `evaluate()`: ALLOW or BLOCK, plus
  * the identifying triple and a per-rule trace.

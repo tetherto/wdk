@@ -27,6 +27,15 @@ export function formatPolicyError(zodError: ZodError, policy: Policy): string;
  */
 export function formatRegisterOptionsError(zodError: ZodError): string;
 /**
+ * Builds a human-readable message for the first issue in a ZodError thrown
+ * by the engine options schema.
+ *
+ * @internal
+ * @param {ZodError} zodError - The error returned by `engineOptionsSchema.safeParse`.
+ * @returns {string} A human-readable message prefixed with `WDK options`.
+ */
+export function formatEngineOptionsError(zodError: ZodError): string;
+/**
  * Zod schema for a single policy object. Validates id/name/scope/rules and
  * enforces cross-field rules (account-scope requirements, override constraint)
  * via a superRefine.
@@ -62,6 +71,13 @@ export const policySchema: z.ZodObject<{
 export const registerOptionsSchema: z.ZodOptional<z.ZodObject<{
     state: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     conditionTimeoutMs: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strip>>;
+/**
+ * Zod schema for the optional engine options bag accepted by the `WDK`
+ * and `PolicyEngine` constructors.
+ */
+export const engineOptionsSchema: z.ZodOptional<z.ZodObject<{
+    maxConditionTimeoutMs: z.ZodOptional<z.ZodNumber>;
 }, z.core.$strip>>;
 export type ZodError = import("zod").ZodError;
 export type Policy = import("./policy-engine.js").Policy;

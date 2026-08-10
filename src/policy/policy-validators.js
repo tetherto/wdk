@@ -17,6 +17,8 @@
 import { WILDCARD } from './constants.js'
 import { PolicyConfigurationError } from './policy-error.js'
 import {
+  engineOptionsSchema,
+  formatEngineOptionsError,
   formatPolicyError,
   formatRegisterOptionsError,
   normalisePolicyWallet,
@@ -25,6 +27,7 @@ import {
 } from './policy-schemas.js'
 
 /** @typedef {import('./policy-engine.js').Policy} Policy */
+/** @typedef {import('./policy-engine.js').PolicyEngineOptions} PolicyEngineOptions */
 /** @typedef {import('./policy-engine.js').PolicyRule} PolicyRule */
 /** @typedef {import('./policy-engine.js').RegisterPolicyOptions} RegisterPolicyOptions */
 
@@ -34,7 +37,7 @@ export { normalisePolicyWallet }
  * Validates the options bag passed to registerPolicy.
  *
  * @internal
- * @param {RegisterPolicyOptions} [options] - Engine-level settings such as `conditionTimeoutMs`.
+ * @param {RegisterPolicyOptions} [options] - Settings applied to the policies the call registers, such as `conditionTimeoutMs`.
  * @throws {PolicyConfigurationError} If `options` is not a plain object or any field fails schema validation.
  */
 export function validateRegisterOptions (options) {
@@ -44,6 +47,23 @@ export function validateRegisterOptions (options) {
 
   if (!result.success) {
     throw new PolicyConfigurationError(formatRegisterOptionsError(result.error))
+  }
+}
+
+/**
+ * Validates the options bag passed to the engine constructor.
+ *
+ * @internal
+ * @param {PolicyEngineOptions} [options] - Engine-level settings such as `maxConditionTimeoutMs`.
+ * @throws {PolicyConfigurationError} If `options` is not a plain object or any field fails schema validation.
+ */
+export function validateEngineOptions (options) {
+  if (options === undefined) return
+
+  const result = engineOptionsSchema.safeParse(options)
+
+  if (!result.success) {
+    throw new PolicyConfigurationError(formatEngineOptionsError(result.error))
   }
 }
 

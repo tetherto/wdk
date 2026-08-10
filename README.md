@@ -79,7 +79,7 @@ const wdk = new WDK(seedPhrase)
       name: 'allow-under-1-eth',
       operation: 'sendTransaction',
       action: 'ALLOW',
-      conditions: [({ params }) => BigInt(params.value) <= 10n ** 18n]
+      conditions: [({ args }) => BigInt(args[0].value) <= 10n ** 18n]
     }]
   })
 
@@ -100,6 +100,33 @@ const result = await account.simulate.sendTransaction({ to: '0x…', value: 1n }
 
 Policies have two scopes — `project` and `account`. A project-scope policy applies globally by default, or only to the wallets named in its `wallet` field (`wallet: 'ethereum'` or `wallet: ['ethereum', 'ton']`). The `wallet` value is the same string passed to `registerWallet`. It might be a chain name like `"ethereum"`, but it could equally be `"treasury-cold"` or any label the consumer chose; the engine treats it as an opaque key. An account-scope policy must declare a `wallet` and targets specific accounts within it, identified by either derivation path (`accounts: ["0'/0/0"]`) or integer index (`accounts: [0, 1]`) — index entries match accounts retrieved via `wdk.getAccount(wallet, index)`; path entries match either retrieval style. Evaluation is narrowest-first with `DENY` winning across scopes. Account-scope `ALLOW` rules can opt into `override_broader_scope: true` to short-circuit broader policies for explicit exceptions (e.g., treasury accounts). Conditions can be sync or async and may carry user-owned state via closures. Templates (`@tetherto/wdk-policy-templates`) and a portal UI for editing policies are coming in later phases.
 
+### Condition context
+
+Every condition receives a single frozen context object with four fields: `operation` (the intercepted operation name), `wallet` (the identifier the account belongs to — the same string passed to `registerWallet`), `account` (a read-only view exposing reads and quotes but no signing or write methods), and `args` (the full argument array the call was made with, snapshotted at evaluation time).
+
+Arguments are read positionally through `args`, which works for every operation shape — including multi-argument ones:
+
+```javascript
+// sendTransaction(tx) — the transaction is args[0]
+conditions: [({ args }) => BigInt(args[0].value) <= 10n ** 18n]
+
+// swidge(options, config) — slippage lives on options, the fee caps on config
+conditions: [({ args }) => args[0].slippage <= 0.05]
+conditions: [({ args }) => args[1] !== undefined && args[1].maxProtocolFeeBps <= 50]
+```
+
+Index positionally against the operation's real signature, and remember that trailing arguments are often optional — `swidge`'s `config` is. Reading a field off an argument that wasn't passed throws, and reading one that lives on a different argument silently yields `undefined`, which compares falsy: either way the rule stops guarding what you think it guards. Check the argument exists before reaching into it.
+
+> **Breaking change:** `context.params`, a shortcut for `args[0]`, has been removed. It was invisible past the first argument, so multi-argument operations had to reach for `args` anyway. Migrate positional access to `args`:
+>
+> ```javascript
+> // Before
+> conditions: [({ params }) => params.to === '0x…']
+>
+> // After
+> conditions: [({ args }) => args[0].to === '0x…']
+> ```
+
 ### Default-deny semantics
 
 The engine is **default-deny on governed accounts**. As soon as any policy applies to an account, the engine wraps every method in `OPERATIONS` (the set of write-facing and signing primitives — `sendTransaction`, `signTransaction`, `transfer`, `approve`, `sign`, `signTypedData`, `signAuthorization`, `delegate`, `revokeDelegation`, and protocol methods like `swap`, `bridge`, `swidge`, etc.) on that account. Any call to a wrapped method whose operation is not addressed by an `ALLOW` rule throws `PolicyViolationError` with `reason: 'no-applicable-rule'`.
@@ -114,7 +141,7 @@ wdk.registerPolicy({
   scope: 'project',
   rules: [
     { name: 'allow-all', operation: '*', action: 'ALLOW', conditions: [] },
-    { name: 'block-bad', operation: 'sendTransaction', action: 'DENY', conditions: [({ params }) => isSanctioned(params.to)] }
+    { name: 'block-bad', operation: 'sendTransaction', action: 'DENY', conditions: [({ args }) => isSanctioned(args[0].to)] }
   ]
 })
 ```

@@ -339,7 +339,7 @@ describe('WDK — policy engine', () => {
       const expectedContext = expect.objectContaining({
         operation: 'sendTransaction',
         wallet: 'ethereum',
-        params: { to: RECIPIENT, value: 1n }
+        args: [{ to: RECIPIENT, value: 1n }]
       })
 
       expect(firstCondition).toHaveBeenCalledTimes(1)
@@ -624,7 +624,7 @@ describe('WDK — policy engine', () => {
             name: 'cap',
             operation: 'transfer',
             action: 'ALLOW',
-            conditions: [({ params }) => BigInt(params.amount) <= 100n]
+            conditions: [({ args }) => BigInt(args[0].amount) <= 100n]
           }]
         })
 
@@ -1011,7 +1011,7 @@ describe('WDK — policy engine', () => {
             name: 'allow-small',
             operation: 'sendTransaction',
             action: 'ALLOW',
-            conditions: [({ params }) => BigInt(params.value) <= 5n]
+            conditions: [({ args }) => BigInt(args[0].value) <= 5n]
           }]
         })
 
@@ -1095,7 +1095,7 @@ describe('WDK — policy engine', () => {
             name: 'allow-small',
             operation: 'sendTransaction',
             action: 'ALLOW',
-            conditions: [({ params }) => BigInt(params.value) <= 5n]
+            conditions: [({ args }) => BigInt(args[0].value) <= 5n]
           }]
         })
 
@@ -1217,8 +1217,8 @@ describe('WDK — policy engine', () => {
             name: 'cap',
             operation: 'sendTransaction',
             action: 'ALLOW',
-            conditions: [({ params }) => {
-              const next = totalSpent + BigInt(params.value)
+            conditions: [({ args }) => {
+              const next = totalSpent + BigInt(args[0].value)
               if (next > cap) return false
               totalSpent = next
               return true
@@ -1319,7 +1319,7 @@ describe('WDK — policy engine', () => {
             name: 'allow-small',
             operation: 'sendTransaction',
             action: 'ALLOW',
-            conditions: [({ params }) => BigInt(params.value) <= 100n]
+            conditions: [({ args }) => BigInt(args[0].value) <= 100n]
           }]
         })
         .registerPolicy({
@@ -1330,7 +1330,7 @@ describe('WDK — policy engine', () => {
             name: 'block-bad',
             operation: 'sendTransaction',
             action: 'DENY',
-            conditions: [({ params }) => params.to === SANCTIONED]
+            conditions: [({ args }) => args[0].to === SANCTIONED]
           }]
         })
 
@@ -1358,7 +1358,7 @@ describe('WDK — policy engine', () => {
             operation: 'sendTransaction',
             action: 'ALLOW',
             override_broader_scope: true,
-            conditions: [({ params }) => BigInt(params.value) <= 100n]
+            conditions: [({ args }) => BigInt(args[0].value) <= 100n]
           }]
         })
         .registerPolicy({
@@ -1397,7 +1397,7 @@ describe('WDK — policy engine', () => {
             operation: 'sendTransaction',
             action: 'ALLOW',
             override_broader_scope: true,
-            conditions: [({ params }) => BigInt(params.value) <= 100n]
+            conditions: [({ args }) => BigInt(args[0].value) <= 100n]
           }]
         })
         .registerPolicy({
@@ -1408,7 +1408,7 @@ describe('WDK — policy engine', () => {
             name: 'block-bad',
             operation: 'sendTransaction',
             action: 'DENY',
-            conditions: [({ params }) => params.to === SANCTIONED]
+            conditions: [({ args }) => args[0].to === SANCTIONED]
           }]
         })
 
@@ -1495,7 +1495,7 @@ describe('WDK — policy engine', () => {
             name: 'allow-small',
             operation: 'sendTransaction',
             action: 'ALLOW',
-            conditions: [({ params }) => BigInt(params.value) <= 5n]
+            conditions: [({ args }) => BigInt(args[0].value) <= 5n]
           }]
         })
 
@@ -1594,7 +1594,7 @@ describe('WDK — policy engine', () => {
       expect(condition).toHaveBeenCalledWith(expect.objectContaining({
         operation: 'approve',
         wallet: 'ethereum',
-        params: { token: TOKEN, spender: SPENDER, amount: 1n }
+        args: [{ token: TOKEN, spender: SPENDER, amount: 1n }]
       }))
       expect(sendTransactionMock).toHaveBeenCalledTimes(1)
       expect(sendTransactionMock).toHaveBeenCalledWith({ to: SPENDER, value: 0n })
@@ -1636,12 +1636,12 @@ describe('WDK — policy engine', () => {
       expect(condition).toHaveBeenNthCalledWith(1, expect.objectContaining({
         operation: 'sendTransaction',
         wallet: 'ethereum',
-        params: { to: RECIPIENT, value: 1n }
+        args: [{ to: RECIPIENT, value: 1n }]
       }))
       expect(condition).toHaveBeenNthCalledWith(2, expect.objectContaining({
         operation: 'sendTransaction',
         wallet: 'ethereum',
-        params: { to: RECIPIENT, value: 2n }
+        args: [{ to: RECIPIENT, value: 2n }]
       }))
       expect(sendTransactionMock).toHaveBeenCalledTimes(2)
       expect(sendTransactionMock).toHaveBeenNthCalledWith(1, { to: RECIPIENT, value: 1n })
@@ -1687,13 +1687,13 @@ describe('WDK — policy engine', () => {
   describe('context immutability', () => {
     const ATTACKER_VALUE = 1_000_000_000_000_000_000n
 
-    test('mutating the params object after the call starts does not change what conditions saw', async () => {
+    test('mutating the argument object after the call starts does not change what conditions saw', async () => {
       let observedTo
 
       // Slow async condition gives the user time to mutate the original object.
-      const condition = jest.fn(async ({ params }) => {
+      const condition = jest.fn(async ({ args }) => {
         await new Promise((resolve) => setTimeout(resolve, 30))
-        observedTo = params.to
+        observedTo = args[0].to
         return true
       })
 
@@ -1720,9 +1720,9 @@ describe('WDK — policy engine', () => {
     })
 
     test('mutating the tx after the call starts does not change what the wallet receives', async () => {
-      const condition = jest.fn(async ({ params }) => {
+      const condition = jest.fn(async ({ args }) => {
         await new Promise((resolve) => setTimeout(resolve, 30))
-        return params.to === RECIPIENT && params.value <= 5n
+        return args[0].to === RECIPIENT && args[0].value <= 5n
       })
 
       getAccountMock.mockResolvedValue(buildAccount())
@@ -1751,8 +1751,8 @@ describe('WDK — policy engine', () => {
 
     test('an argument whose getter returns different values per read cannot split the check from execution', async () => {
       let evaluatedValue
-      const condition = jest.fn(({ params }) => {
-        evaluatedValue = params.value
+      const condition = jest.fn(({ args }) => {
+        evaluatedValue = args[0].value
         return true
       })
 
@@ -1781,8 +1781,8 @@ describe('WDK — policy engine', () => {
     })
 
     test('a condition function cannot mutate its way into the underlying call', async () => {
-      const condition = jest.fn(({ params }) => {
-        params.to = SANCTIONED // mutation should not propagate
+      const condition = jest.fn(({ args }) => {
+        args[0].to = SANCTIONED // mutation should not propagate
         return true
       })
 
@@ -2132,7 +2132,7 @@ describe('WDK — policy engine', () => {
   // -------------------------------------------------------------------------
 
   describe('context object', () => {
-    test('the condition function receives operation, wallet, params, args, and a read-only account', async () => {
+    test('the condition function receives operation, wallet, args, and a read-only account', async () => {
       let captured
 
       getAccountMock.mockResolvedValue(buildAccount())
@@ -2156,14 +2156,70 @@ describe('WDK — policy engine', () => {
 
       expect(captured.operation).toBe('sendTransaction')
       expect(captured.wallet).toBe('base')
-      expect(captured.params).toEqual({ to: RECIPIENT, value: 7n })
       expect(captured.args).toHaveLength(2)
       expect(captured.args[0]).toEqual({ to: RECIPIENT, value: 7n })
       expect(captured.args[1]).toEqual({ gas: 21000 })
+      expect(captured.params).toBeUndefined()
       expect(captured.account.path).toBe(PATH_DEFAULT)
       expect(captured.account.sendTransaction).toBeUndefined()
       expect(captured.account.transfer).toBeUndefined()
       expect(Object.isFrozen(captured)).toBe(true)
+    })
+
+    test('a condition can gate a multi-argument operation on an argument other than the first', async () => {
+      const swidgeInstanceMock = jest.fn().mockResolvedValue(DUMMY_SWIDGE_RESULT)
+
+      class MySwidgeProtocol extends SwidgeProtocol {
+        constructor () { super() }
+        async swidge (options, config) { return swidgeInstanceMock(options, config) }
+      }
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      const observedArgs = []
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerProtocol('ethereum', 'bridge-and-swap', MySwidgeProtocol, {})
+        .registerPolicy({
+          id: 'protocol-fee-cap',
+          name: 'protocol-fee-cap',
+          scope: 'project',
+          rules: [
+            {
+              name: 'deny-uncapped-protocol-fee',
+              operation: 'swidge',
+              action: 'DENY',
+              conditions: [({ args }) => {
+                observedArgs.push(args)
+                return args[1] === undefined || args[1].maxProtocolFeeBps > 50
+              }]
+            },
+            { name: 'allow-swidge', operation: 'swidge', action: 'ALLOW', conditions: [] }
+          ]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const swidge = account.getSwidgeProtocol('bridge-and-swap')
+
+      const options = { fromToken: 'A', toToken: 'B', fromTokenAmount: 1n }
+      const allowed = await swidge.swidge(options, { maxProtocolFeeBps: 25 })
+      const overCap = await catchAsync(() => swidge.swidge(options, { maxProtocolFeeBps: 500 }))
+      const noConfig = await catchAsync(() => swidge.swidge(options))
+
+      expect(allowed).toEqual(DUMMY_SWIDGE_RESULT)
+      expect(overCap.name).toBe('PolicyViolationError')
+      expect(overCap.policyId).toBe('protocol-fee-cap')
+      expect(overCap.ruleName).toBe('deny-uncapped-protocol-fee')
+      expect(noConfig.name).toBe('PolicyViolationError')
+      expect(noConfig.ruleName).toBe('deny-uncapped-protocol-fee')
+      expect(swidgeInstanceMock).toHaveBeenCalledTimes(1)
+      expect(swidgeInstanceMock).toHaveBeenCalledWith(options, { maxProtocolFeeBps: 25 })
+      expect(observedArgs).toEqual([
+        [options, { maxProtocolFeeBps: 25 }],
+        [options, { maxProtocolFeeBps: 500 }],
+        [options]
+      ])
     })
   })
 

@@ -51,7 +51,6 @@ export function buildContext ({ operation, wallet, account, args }) {
     operation,
     wallet,
     account,
-    params: safeArgs[0],
     args: safeArgs
   })
 }

@@ -16,4 +16,4 @@ export type PolicyOperation = import("./src/policy/index.js").PolicyOperation;
 export type SimulationResult = import("./src/policy/index.js").SimulationResult;
 export type SimulationTraceEntry = import("./src/policy/index.js").SimulationTraceEntry;
 export type RegisterPolicyOptions = import("./src/policy/index.js").RegisterPolicyOptions;
-export { PolicyViolationError, PolicyConfigurationError } from "./src/policy/index.js";
+export { PolicyViolationError, PolicyConfigurationError, DEFAULT_POLICY_EXCLUSIONS } from "./src/policy/index.js";

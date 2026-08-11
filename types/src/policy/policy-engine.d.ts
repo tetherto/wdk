@@ -19,6 +19,23 @@ export default class PolicyEngine {
     private _registry;
     /** @private */
     private _maxConditionTimeoutMs;
+    /** @private */
+    private _exclusions;
+    /** @private */
+    private _frozenExclusions;
+    /**
+     * The resolved exclusion set — `DEFAULT_POLICY_EXCLUSIONS` unioned with the
+     * consumer's additions. Consulted by the proxy for every callable it wraps.
+     *
+     * @returns {Set<string>} The method names that bypass evaluation.
+     */
+    get exclusions(): Set<string>;
+    /**
+     * The resolved exclusion set as a frozen array, for consumer introspection.
+     *
+     * @returns {readonly string[]} The method names that bypass evaluation, in insertion order.
+     */
+    getExclusions(): readonly string[];
     /**
      * Registers one or more policies. Synchronously throws on validation failures.
      * Validation runs to completion before any registry mutation, so a failure
@@ -70,10 +87,12 @@ export type PolicyAction = "ALLOW" | "DENY";
  */
 export type PolicyScope = "project" | "account";
 /**
- * A wrapped operation name from the supported set, or `*` to match any wrapped operation.
- * Each name must match an actual method on `IWalletAccount` or a registered protocol.
+ * The name of a governed method, or `*` to match any of them. Every callable a
+ * wallet or protocol exposes is governed unless it appears in the engine's
+ * exclusion set, so this is any method name rather than a fixed set. A name
+ * that matches nothing on the account registers fine and never fires.
  */
-export type PolicyOperation = "sendTransaction" | "signTransaction" | "transfer" | "approve" | "sign" | "signTypedData" | "signAuthorization" | "delegate" | "revokeDelegation" | "swap" | "bridge" | "supply" | "withdraw" | "borrow" | "repay" | "buy" | "sell" | "swidge" | "createDepositAddress" | "renewDepositAddress" | "recoverDepositAddress" | "disableDepositAddress" | "*";
+export type PolicyOperation = string;
 /**
  * The frozen context object passed to every condition function during evaluation.
  */
@@ -197,6 +216,10 @@ export type PolicyEngineOptions = {
      * - Upper bound, in milliseconds, on the per-condition timeout any single policy can be given. Defaults to 30000. A policy registered with a larger `conditionTimeoutMs` is capped to this value rather than rejected.
      */
     maxConditionTimeoutMs?: number;
+    /**
+     * - Method names to hand through ungoverned, unioned with `DEFAULT_POLICY_EXCLUSIONS`. Append-only: entries cannot be removed from the defaults. Names that match nothing on any registered wallet are accepted without error.
+     */
+    policyExclusions?: string[];
 };
 /**
  * One row in a simulation trace: the rule that was evaluated, its scope,

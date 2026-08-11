@@ -15,6 +15,7 @@
 'use strict'
 
 import { createPolicyEnforcedAccount } from './policy-account-proxy.js'
+import { DEFAULT_POLICY_EXCLUSIONS } from './constants.js'
 import { PolicyConfigurationError } from './policy-error.js'
 import { evaluate } from './policy-evaluator.js'
 import PolicyRegistry from './policy-registry.js'
@@ -40,14 +41,12 @@ import {
  */
 
 /**
- * A wrapped operation name from the supported set, or `*` to match any wrapped operation.
- * Each name must match an actual method on `IWalletAccount` or a registered protocol.
+ * The name of a governed method, or `*` to match any of them. Every callable a
+ * wallet or protocol exposes is governed unless it appears in the engine's
+ * exclusion set, so this is any method name rather than a fixed set. A name
+ * that matches nothing on the account registers fine and never fires.
  *
- * @typedef {'sendTransaction' | 'signTransaction' | 'transfer' | 'approve'
- *   | 'sign' | 'signTypedData' | 'signAuthorization' | 'delegate' | 'revokeDelegation'
- *   | 'swap' | 'bridge' | 'supply' | 'withdraw' | 'borrow' | 'repay' | 'buy' | 'sell'
- *   | 'swidge' | 'createDepositAddress' | 'renewDepositAddress'
- *   | 'recoverDepositAddress' | 'disableDepositAddress' | '*'} PolicyOperation
+ * @typedef {string} PolicyOperation
  */
 
 /**
@@ -118,6 +117,7 @@ import {
  *
  * @typedef {Object} PolicyEngineOptions
  * @property {number} [maxConditionTimeoutMs] - Upper bound, in milliseconds, on the per-condition timeout any single policy can be given. Defaults to 30000. A policy registered with a larger `conditionTimeoutMs` is capped to this value rather than rejected.
+ * @property {string[]} [policyExclusions] - Method names to hand through ungoverned, unioned with `DEFAULT_POLICY_EXCLUSIONS`. Append-only: entries cannot be removed from the defaults. Names that match nothing on any registered wallet are accepted without error.
  */
 
 /**
@@ -194,6 +194,31 @@ export default class PolicyEngine {
 
     /** @private */
     this._maxConditionTimeoutMs = options?.maxConditionTimeoutMs ?? DEFAULT_MAX_CONDITION_TIMEOUT_MS
+
+    /** @private */
+    this._exclusions = new Set([...DEFAULT_POLICY_EXCLUSIONS, ...(options?.policyExclusions ?? [])])
+
+    /** @private */
+    this._frozenExclusions = Object.freeze([...this._exclusions])
+  }
+
+  /**
+   * The resolved exclusion set — `DEFAULT_POLICY_EXCLUSIONS` unioned with the
+   * consumer's additions. Consulted by the proxy for every callable it wraps.
+   *
+   * @returns {Set<string>} The method names that bypass evaluation.
+   */
+  get exclusions () {
+    return this._exclusions
+  }
+
+  /**
+   * The resolved exclusion set as a frozen array, for consumer introspection.
+   *
+   * @returns {readonly string[]} The method names that bypass evaluation, in insertion order.
+   */
+  getExclusions () {
+    return this._frozenExclusions
   }
 
   /**

@@ -353,7 +353,7 @@ These are not collisions, but they are the failure modes a future re-audit is mo
 
 ## Section D — Proposed `DEFAULT_POLICY_EXCLUSIONS`
 
-Union of READ and LIFECYCLE across every audited package, minus collisions (none) and minus the three flagged in Section C. 71 entries, sorted.
+Union of READ and LIFECYCLE across every audited package, minus collisions (none) and minus the three flagged in Section C. 73 entries, sorted.
 
 ```js
 export const DEFAULT_POLICY_EXCLUSIONS = Object.freeze([
@@ -455,6 +455,12 @@ Aave (2):    setUseReserveAsCollateral, setUserEMode
 ```
 
 ---
+
+### Known limitation: non-WDK base classes
+
+The extraction covered classes matching `WalletAccount*` and `*Protocol*`. A wallet whose account inherits from an unrelated base — `EventEmitter`, say — exposes that base's methods on the same object, and the proxy's prototype walk governs them. This audit classified none of those, and no re-run scoped as described would find them.
+
+No account class in the org currently does this, so the list is complete for every shipping package. If one starts to, its `on`/`emit`/`once` surface becomes governed and its consumers must append those names via `policyExclusions`. Fixing it centrally would mean either hardcoding third-party base surfaces here or having wallet packages declare their own read sets — the latter is the better long-term shape and is out of scope for this PR.
 
 ## Section E — Deferred to consumer append
 

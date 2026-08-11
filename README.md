@@ -144,6 +144,10 @@ Three rules worth knowing:
 - **Accessors are never intercepted.** Only callable methods are wrapped, and the proxy classifies members through their property descriptors, so a getter is never invoked just to decide whether to wrap it.
 - **Inherited methods are governed.** The proxy walks the prototype chain, so a method declared on a base account class is intercepted the same as an own method.
 - **Accounts with no policies registered are untouched.** The proxy is not applied at all, so ungoverned use costs nothing.
+- **Governed calls are asynchronous.** Evaluation is async, so a governed method returns a Promise even if the underlying method is synchronous. Every value-moving method in the WDK wallet packages is already `async`; if you call a synchronous method on a governed account, `await` it.
+- **Governed arguments must be structured-cloneable.** The engine snapshots arguments so a caller cannot mutate them between evaluation and execution. An argument carrying a function (a callback, say) throws `PolicyConfigurationError`, and a class instance reaches the wallet as a plain object. Exclude such a method, or keep its arguments plain.
+
+A rule may not name an excluded method: the proxy never wraps one, so the rule could not fire, and `registerPolicy` rejects it with `PolicyConfigurationError` rather than registering a guardrail that silently does nothing.
 
 #### Appending your own exclusions
 

@@ -14,7 +14,6 @@
 
 'use strict'
 
-import { PROTOCOL_METHODS } from './constants.js'
 import { buildContext, snapshotArgs } from './policy-context.js'
 import PolicyViolationError, { PolicyConfigurationError } from './policy-error.js'
 
@@ -167,12 +166,12 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
   // list leaves any method it forgot silently unpoliced — the failure mode
   // that let Spark's payLightningInvoice bypass the engine entirely — so the
   // unknown method is governed and denies loudly instead.
-  const exclusions = engine.exclusions
+  const governedMethods = collectGovernedMethods(account, engine)
 
-  const enforcedOperations = collectGovernedMethods(account, exclusions)
+  const enforcedOperations = [...governedMethods.keys()]
 
-  for (const op of enforcedOperations) {
-    substitutions.set(op, buildEnforcedMethod(op, account[op].bind(account), ctx))
+  for (const [op, method] of governedMethods) {
+    substitutions.set(op, buildEnforcedMethod(op, method.bind(account), ctx))
   }
 
   for (const [getterName] of PROTOCOL_GETTERS) {
@@ -252,27 +251,28 @@ function buildEnforcedMethod (name, boundOriginal, ctx) {
  * @param {Set<string>} exclusions - Method names to hand through ungoverned.
  * @returns {string[]} The method names to wrap in enforced versions.
  */
-function collectGovernedMethods (subject, exclusions) {
-  const names = new Set()
+function collectGovernedMethods (subject, engine) {
+  const methods = new Map()
 
   for (let o = subject; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
     for (const [name, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(o))) {
+      if (methods.has(name)) continue
       if (name === 'constructor' || isProtectedMember(name)) continue
-      if (exclusions.has(name)) continue
+      if (engine.isExcluded(name)) continue
       if (typeof descriptor.value !== 'function') continue
 
-      names.add(name)
+      methods.set(name, descriptor.value)
     }
   }
 
-  return [...names]
+  return methods
 }
 
 function wrapProtocolInProxy (protocol, ctx) {
   const substitutions = new Map()
 
-  for (const method of collectGovernedMethods(protocol, ctx.engine.exclusions)) {
-    substitutions.set(method, buildEnforcedMethod(method, protocol[method].bind(protocol), ctx))
+  for (const [name, method] of collectGovernedMethods(protocol, ctx.engine)) {
+    substitutions.set(name, buildEnforcedMethod(name, method.bind(protocol), ctx))
   }
 
   return createGuardedProxy(protocol, substitutions)
@@ -294,21 +294,19 @@ function buildSimulateMirror (methodNames, ctx) {
     }
   }
 
-  for (const [getterName, type] of PROTOCOL_GETTERS) {
+  for (const [getterName] of PROTOCOL_GETTERS) {
     if (typeof ctx.account[getterName] !== 'function') continue
 
-    // The simulate mirror is built before any protocol instance exists, so it
-    // cannot enumerate a live surface the way the enforced proxy does. Fall
-    // back to the known verb set for the protocol type.
-    const writeMethods = PROTOCOL_METHODS[type]
+    const originalGetter = ctx.account[getterName].bind(ctx.account)
 
-    // Accept the `label` arg for parity with the real `account.getXProtocol(label)`.
-    // Simulation is label-agnostic; the arg is reserved for future use if
-    // simulate ever needs to differentiate by protocol label.
-    simulate[getterName] = (_label) => {
+    // Resolve the protocol at call time and mirror the same surface the
+    // enforced proxy governs. Deriving it from a fixed verb list instead would
+    // hide every method outside that list from simulate while the engine still
+    // blocked it — the opposite of what simulate is for.
+    simulate[getterName] = (label) => {
       const out = Object.create(null)
 
-      for (const method of writeMethods) {
+      for (const method of collectGovernedMethods(originalGetter(label), ctx.engine).keys()) {
         out[method] = async (...args) => {
           const context = buildContext({
             operation: method,

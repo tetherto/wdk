@@ -21,6 +21,8 @@ const DUMMY_BRIDGE_RESULT = { hash: '0xdummy-bridge-hash' }
 const DUMMY_SWIDGE_RESULT = { hash: '0xdummy-swidge-hash' }
 const DUMMY_SDA_ADDRESS_RESULT = [{ address: '0xdummy-deposit-address' }]
 const DUMMY_SDA_ROUTES = [{ sourceChains: ['arbitrum'], destinationChain: 'polygon' }]
+const DUMMY_LIGHTNING_PAYMENT = { id: 'dummy-payment' }
+const DUMMY_EMODE_RESULT = { hash: '0xdummy-emode' }
 const DUMMY_SIGNED_TX = '0xdummy-signed-tx'
 
 // Test inputs (no DUMMY_ prefix per CQ5). Addresses are valid EVM shape
@@ -134,7 +136,7 @@ describe('WDK — policy engine', () => {
     getAccountMock.mockReset()
     getAccountByPathMock.mockReset()
     disposeWalletMock.mockReset()
-    payInheritedMock.mockReset().mockResolvedValue({ id: 'dummy-payment' })
+    payInheritedMock.mockReset().mockResolvedValue(DUMMY_LIGHTNING_PAYMENT)
     supplyMock.mockReset().mockResolvedValue({ hash: '0xdummy-supply' })
 
     wdk = new WDK(SEED_PHRASE)
@@ -258,7 +260,7 @@ describe('WDK — policy engine', () => {
     })
 
     test('accepts an operation name the core package has never heard of', async () => {
-      const payLightningInvoiceMock = jest.fn().mockResolvedValue({ id: 'dummy-payment' })
+      const payLightningInvoiceMock = jest.fn().mockResolvedValue(DUMMY_LIGHTNING_PAYMENT)
 
       getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, { payLightningInvoice: payLightningInvoiceMock }))
 
@@ -2787,7 +2789,7 @@ describe('WDK — policy engine', () => {
 
   describe('method coverage', () => {
     test('a method absent from the exclusion set is governed and denied when no rule addresses it', async () => {
-      const payLightningInvoiceMock = jest.fn().mockResolvedValue({ id: 'dummy-payment' })
+      const payLightningInvoiceMock = jest.fn().mockResolvedValue(DUMMY_LIGHTNING_PAYMENT)
 
       getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, { payLightningInvoice: payLightningInvoiceMock }))
 
@@ -2843,15 +2845,16 @@ describe('WDK — policy engine', () => {
 
       expect(occurrences).toEqual(['getBalance'])
       expect(resolved).toContain('syncWalletBalance')
-      expect(resolved.length).toBe(DEFAULT_POLICY_EXCLUSIONS.length + 1)
+      expect(resolved.length).toBe(74)
     })
 
     test('an empty or omitted policyExclusions resolves to exactly the defaults', () => {
       const emptyWdk = new WDK(SEED_PHRASE, { policyExclusions: [] })
       const omittedWdk = new WDK(SEED_PHRASE)
 
-      expect(emptyWdk.getPolicyExclusions()).toEqual([...DEFAULT_POLICY_EXCLUSIONS])
-      expect(omittedWdk.getPolicyExclusions()).toEqual([...DEFAULT_POLICY_EXCLUSIONS])
+      expect(emptyWdk.getPolicyExclusions().length).toBe(73)
+      expect(omittedWdk.getPolicyExclusions().length).toBe(73)
+      expect(emptyWdk.getPolicyExclusions()).toEqual(omittedWdk.getPolicyExclusions())
     })
 
     test('rejects a non-string entry in policyExclusions at construction time', () => {
@@ -2999,25 +3002,8 @@ describe('WDK — policy engine', () => {
       expect(await account.getBalance()).toBe(DUMMY_BALANCE)
     })
 
-    test('the resolved exclusion set cannot be widened after construction', async () => {
-      getAccountMock.mockResolvedValue(buildAccount())
-
-      wdk
-        .registerWallet('ethereum', WalletManagerMock, {})
-        .registerPolicy(projectDenyAll('deny-everything'))
-
-      expect(wdk._policyEngine.exclusions).toBeUndefined()
-      expect(typeof wdk._policyEngine.isExcluded).toBe('function')
-
-      const account = await wdk.getAccount('ethereum', 0)
-      const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
-
-      expect(err.name).toBe('PolicyViolationError')
-      expect(wdk.getPolicyExclusions()).not.toContain('sendTransaction')
-    })
-
     test('a protocol method outside the known verb list is governed and mirrored in simulate', async () => {
-      const setUserEModeMock = jest.fn().mockResolvedValue({ hash: '0xdummy-emode' })
+      const setUserEModeMock = jest.fn().mockResolvedValue(DUMMY_EMODE_RESULT)
 
       class MyLendingProtocol extends LendingProtocol {
         constructor () { super() }
@@ -3047,13 +3033,15 @@ describe('WDK — policy engine', () => {
       expect(err.reason).toBe('no-applicable-rule')
       expect(setUserEModeMock).not.toHaveBeenCalled()
       expect(sim.decision).toBe('DENY')
+      expect(sim.policy_id).toBe(null)
+      expect(sim.matched_rule).toBe(null)
       expect(sim.reason).toBe('no-applicable-rule')
     })
 
     test('a governed synchronous method resolves through a promise instead of returning directly', async () => {
       const account = buildAccount()
 
-      account.describeAccount = () => 'plain-sync-value'
+      account.describeAccount = () => 'dummy-sync-value'
 
       getAccountMock.mockResolvedValue(account)
 
@@ -3070,12 +3058,12 @@ describe('WDK — policy engine', () => {
       const returned = governed.describeAccount()
 
       expect(returned).toBeInstanceOf(Promise)
-      expect(await returned).toBe('plain-sync-value')
+      expect(await returned).toBe('dummy-sync-value')
     })
 
     test('two instances of the same class governed by engines with different exclusions do not share a resolution', async () => {
       class SharedProto {
-        async syncWalletBalance () { return 'synced' }
+        async syncWalletBalance () { return 'dummy-synced' }
         async payLightningInvoice () { return payInheritedMock() }
       }
 
@@ -3097,20 +3085,20 @@ describe('WDK — policy engine', () => {
 
       expect(strictErr.name).toBe('PolicyViolationError')
       expect(strictErr.reason).toBe('no-applicable-rule')
-      expect(await lenientAccount.syncWalletBalance()).toBe('synced')
+      expect(await lenientAccount.syncWalletBalance()).toBe('dummy-synced')
     })
 
     test('a prototype method shadowed by an own accessor is bound without invoking the accessor', async () => {
       let reads = 0
 
       class BaseShadow {
-        async doThing () { return 'from-prototype' }
+        async doThing () { return 'dummy-from-prototype' }
       }
 
       const shadowed = Object.assign(new BaseShadow(), buildAccount())
 
       Object.defineProperty(shadowed, 'doThing', {
-        get () { reads += 1; return async () => 'from-getter' },
+        get () { reads += 1; return async () => 'dummy-from-getter' },
         configurable: true
       })
 

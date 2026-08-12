@@ -12,7 +12,9 @@
 export default class PolicyEngine {
     /**
      * @param {PolicyEngineOptions} [options] - Engine-level settings such as `maxConditionTimeoutMs`.
-     * @throws {PolicyConfigurationError} If `options` is not a plain object, `maxConditionTimeoutMs` is not a finite positive number, or `policyExclusions` is not an array of non-empty strings.
+     * @throws {PolicyConfigurationError} If `options` is not a plain object.
+     * @throws {PolicyConfigurationError} If `maxConditionTimeoutMs` is not a finite positive number.
+     * @throws {PolicyConfigurationError} If `policyExclusions` is not an array of non-empty strings.
      */
     constructor(options?: PolicyEngineOptions);
     /** @private */
@@ -24,10 +26,6 @@ export default class PolicyEngine {
     /**
      * Reports whether a method name bypasses evaluation. The proxy asks this for
      * every callable it considers wrapping.
-     *
-     * Exposed as a predicate rather than the backing set so no caller can widen
-     * the exclusions after construction — mutating them at runtime would silently
-     * un-govern a method while `getExclusions()` kept reporting the old answer.
      *
      * @param {string} name - The method name to test.
      * @returns {boolean} True if calls to this method are handed through ungoverned.
@@ -47,7 +45,10 @@ export default class PolicyEngine {
      * @param {Policy | Policy[]} policies - A single policy or array of policies to register.
      * @param {RegisterPolicyOptions} [options] - Settings applied to the policies this call registers, such as `conditionTimeoutMs`.
      * @param {RegistrationContext} [registrationContext] - Optional set of registered wallet identifiers. When provided, the engine verifies every wallet binding referenced by the policies is in the set before touching the registry.
-     * @throws {PolicyConfigurationError} If any policy or option fails schema validation, the input is an empty array, a policy binds to a wallet not present in `registrationContext.knownWallets`, or a rule addresses an excluded method.
+     * @throws {PolicyConfigurationError} If any policy or option fails schema validation.
+     * @throws {PolicyConfigurationError} If `policies` is an empty array.
+     * @throws {PolicyConfigurationError} If a policy binds to a wallet not present in `registrationContext.knownWallets`.
+     * @throws {PolicyConfigurationError} If a rule addresses a method in the resolved exclusion set.
      */
     register(policies: Policy | Policy[], options?: RegisterPolicyOptions, registrationContext?: RegistrationContext): void;
     /**

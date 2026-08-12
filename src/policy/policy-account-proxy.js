@@ -278,14 +278,11 @@ function collectGovernedMethods (subject, engine) {
  *
  * The result is a pure function of the prototype chain and the engine's
  * exclusion set, and the exclusion set is fixed at construction — so every
- * instance of a class resolves to the same answer. That matters because
- * `account.getLendingProtocol(label)` builds a fresh protocol instance per
- * call, and re-walking its chain on each one was the dominant cost of the
- * idiomatic `getXProtocol(label).verb(...)` shape.
+ * instance of a class resolves to the same answer.
  *
  * Cached functions are unbound; the caller binds them to its own instance.
  *
- * @param {object | null} prototype - The prototype to start from, or null.
+ * @param {object | null} prototype - Start of the chain to walk, normally `Object.getPrototypeOf(subject)`. Null and `Object.prototype` short-circuit to an empty result.
  * @param {PolicyEngine} engine - The engine whose exclusion set decides what is skipped.
  * @returns {Map<string, Function>} The inherited governed methods. Shared — callers must not mutate it.
  */

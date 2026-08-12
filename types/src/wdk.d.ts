@@ -19,7 +19,9 @@ export default class WDK {
      * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase.
      * @param {WdkOptions} [options] - Instance-level settings such as `maxConditionTimeoutMs` and `policyExclusions`.
      * @throws {Error} If the seed is not valid.
-     * @throws {PolicyConfigurationError} If `options` is not a plain object, `maxConditionTimeoutMs` is not a finite positive number, or `policyExclusions` is not an array of non-empty strings.
+     * @throws {PolicyConfigurationError} If `options` is not a plain object.
+     * @throws {PolicyConfigurationError} If `maxConditionTimeoutMs` is not a finite positive number.
+     * @throws {PolicyConfigurationError} If `policyExclusions` is not an array of non-empty strings.
      */
     constructor(seed: string | Uint8Array, options?: WdkOptions);
     /** @private */

@@ -11,7 +11,7 @@
  */
 export default class PolicyEngine {
     /**
-     * @param {PolicyEngineOptions} [options] - Engine-level settings such as `maxConditionTimeoutMs`.
+     * @param {PolicyEngineOptions} [options] - Engine-level settings such as `maxConditionTimeoutMs` and `policyExclusions`.
      * @throws {PolicyConfigurationError} If `options` is not a plain object.
      * @throws {PolicyConfigurationError} If `maxConditionTimeoutMs` is not a finite positive number.
      * @throws {PolicyConfigurationError} If `policyExclusions` is not an array of non-empty strings.

@@ -2969,7 +2969,7 @@ describe('WDK — policy engine', () => {
       expect(err.name).toBe('PolicyConfigurationError')
       expect(err.message).toBe(
         "Rule 'deny-getAddress' in policy 'no-address': 'getAddress' is an excluded method, so this rule could never be evaluated. " +
-        'Remove it from the rule, or stop excluding the method so calls to it reach the engine.'
+        "Remove it from the rule, or drop the method from the 'policyExclusions' option so calls to it reach the engine."
       )
     })
 

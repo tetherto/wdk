@@ -22,12 +22,12 @@ import PolicyViolationError, { PolicyConfigurationError } from './policy-error.j
 /** @typedef {import('./policy-engine.js').WrapContext} WrapContext */
 
 const PROTOCOL_GETTERS = [
-  ['getSwapProtocol', 'swap'],
-  ['getBridgeProtocol', 'bridge'],
-  ['getLendingProtocol', 'lending'],
-  ['getFiatProtocol', 'fiat'],
-  ['getSwidgeProtocol', 'swidge'],
-  ['getSdaProtocol', 'sda']
+  'getSwapProtocol',
+  'getBridgeProtocol',
+  'getLendingProtocol',
+  'getFiatProtocol',
+  'getSwidgeProtocol',
+  'getSdaProtocol'
 ]
 
 function isProtectedMember (prop) {
@@ -174,7 +174,7 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
     substitutions.set(op, buildEnforcedMethod(op, method.bind(account), ctx))
   }
 
-  for (const [getterName] of PROTOCOL_GETTERS) {
+  for (const getterName of PROTOCOL_GETTERS) {
     if (typeof account[getterName] !== 'function') continue
 
     const originalGetter = account[getterName].bind(account)
@@ -294,7 +294,7 @@ function buildSimulateMirror (methodNames, ctx) {
     }
   }
 
-  for (const [getterName] of PROTOCOL_GETTERS) {
+  for (const getterName of PROTOCOL_GETTERS) {
     if (typeof ctx.account[getterName] !== 'function') continue
 
     const originalGetter = ctx.account[getterName].bind(ctx.account)

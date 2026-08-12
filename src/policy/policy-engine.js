@@ -14,8 +14,8 @@
 
 'use strict'
 
-import { createPolicyEnforcedAccount } from './policy-account-proxy.js'
 import { DEFAULT_POLICY_EXCLUSIONS, WILDCARD } from './constants.js'
+import { createPolicyEnforcedAccount } from './policy-account-proxy.js'
 import { PolicyConfigurationError } from './policy-error.js'
 import { evaluate } from './policy-evaluator.js'
 import PolicyRegistry from './policy-registry.js'
@@ -165,33 +165,6 @@ import {
  * @typedef {Object} RegistrationContext
  * @property {Set<string>} [knownWallets] - Set of wallet identifiers the host considers registered. When provided, the engine throws if any policy binds to a wallet not in the set.
  */
-
-/**
- * Rejects a rule that names an excluded method. Such a rule is well-formed and
- * registers cleanly, but the proxy never wraps an excluded method, so the rule
- * can never be evaluated — a DENY that silently permits. That is the same
- * class of failure deny-by-default exists to remove, so it fails loudly at
- * registration instead. The wildcard is exempt: it means "every governed
- * operation", which is exactly the set that excludes these names.
- *
- * @param {Policy} policy - The validated policy whose rules are being checked.
- * @param {Set<string>} exclusions - The engine's resolved exclusion set.
- * @throws {PolicyConfigurationError} If any rule addresses an excluded method.
- */
-function assertRulesAddressGovernedOperations (policy, exclusions) {
-  for (const rule of policy.rules) {
-    const operations = Array.isArray(rule.operation) ? rule.operation : [rule.operation]
-
-    for (const operation of operations) {
-      if (operation === WILDCARD || !exclusions.has(operation)) continue
-
-      throw new PolicyConfigurationError(
-        `Rule '${rule.name}' in policy '${policy.id}': '${operation}' is an excluded method, so this rule could never be evaluated. ` +
-        'Remove it from the rule, or stop excluding the method so calls to it reach the engine.'
-      )
-    }
-  }
-}
 
 const DEFAULT_CONDITION_TIMEOUT_MS = 30_000
 
@@ -354,6 +327,33 @@ export default class PolicyEngine {
       matched_rule: verdict.ruleName,
       reason: verdict.reason,
       trace: verdict.trace
+    }
+  }
+}
+
+/**
+ * Rejects a rule that names an excluded method. Such a rule is well-formed and
+ * registers cleanly, but the proxy never wraps an excluded method, so the rule
+ * can never be evaluated — a DENY that silently permits. That is the same
+ * class of failure deny-by-default exists to remove, so it fails loudly at
+ * registration instead. The wildcard is exempt: it means "every governed
+ * operation", which is exactly the set that excludes these names.
+ *
+ * @param {Policy} policy - The validated policy whose rules are being checked.
+ * @param {Set<string>} exclusions - The engine's resolved exclusion set.
+ * @throws {PolicyConfigurationError} If any rule addresses an excluded method.
+ */
+function assertRulesAddressGovernedOperations (policy, exclusions) {
+  for (const rule of policy.rules) {
+    const operations = Array.isArray(rule.operation) ? rule.operation : [rule.operation]
+
+    for (const operation of operations) {
+      if (operation === WILDCARD || !exclusions.has(operation)) continue
+
+      throw new PolicyConfigurationError(
+        `Rule '${rule.name}' in policy '${policy.id}': '${operation}' is an excluded method, so this rule could never be evaluated. ` +
+        "Remove it from the rule, or drop the method from the 'policyExclusions' option so calls to it reach the engine."
+      )
     }
   }
 }

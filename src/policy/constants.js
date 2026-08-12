@@ -20,6 +20,9 @@
 // produces no signature, and creates no remote state. Derived from an org-wide
 // audit of every wdk-wallet-* and wdk-protocol-* package; see
 // docs/policy-exclusions-audit.md, which is the source of truth for this list.
+// Frozen because it is exported publicly: a consumer mutating the array in
+// place would widen the exclusion set for every engine built afterwards in the
+// same process, silently un-governing methods across unrelated WDK instances.
 export const DEFAULT_POLICY_EXCLUSIONS = Object.freeze([
   'cleanupConnections',
   'deriveDepositAddress',
@@ -101,12 +104,3 @@ export const WILDCARD = '*'
 export const SCOPES = ['project', 'account']
 
 export const ACTIONS = ['ALLOW', 'DENY']
-
-export const PROTOCOL_METHODS = {
-  swap: ['swap'],
-  bridge: ['bridge'],
-  lending: ['supply', 'withdraw', 'borrow', 'repay'],
-  fiat: ['buy', 'sell'],
-  swidge: ['swidge'],
-  sda: ['createDepositAddress', 'renewDepositAddress', 'recoverDepositAddress', 'disableDepositAddress']
-}

@@ -35,4 +35,4 @@
 /** @typedef {import('./src/policy/index.js').RegisterPolicyOptions} RegisterPolicyOptions */
 
 export { default } from './src/wdk.js'
-export { PolicyViolationError, PolicyConfigurationError } from './src/policy/index.js'
+export { PolicyViolationError, PolicyConfigurationError, DEFAULT_POLICY_EXCLUSIONS } from './src/policy/index.js'

@@ -11,14 +11,32 @@
  */
 export default class PolicyEngine {
     /**
-     * @param {PolicyEngineOptions} [options] - Engine-level settings such as `maxConditionTimeoutMs`.
-     * @throws {PolicyConfigurationError} If `options` is not a plain object or `maxConditionTimeoutMs` is not a finite positive number.
+     * @param {PolicyEngineOptions} [options] - Engine-level settings such as `maxConditionTimeoutMs` and `policyExclusions`.
+     * @throws {PolicyConfigurationError} If `options` is not a plain object.
+     * @throws {PolicyConfigurationError} If `maxConditionTimeoutMs` is not a finite positive number.
+     * @throws {PolicyConfigurationError} If `policyExclusions` is not an array of non-empty strings.
      */
     constructor(options?: PolicyEngineOptions);
     /** @private */
     private _registry;
     /** @private */
     private _maxConditionTimeoutMs;
+    /** @private */
+    private _exclusions;
+    /**
+     * Reports whether a method name bypasses evaluation. The proxy asks this for
+     * every callable it considers wrapping.
+     *
+     * @param {string} name - The method name to test.
+     * @returns {boolean} True if calls to this method are handed through ungoverned.
+     */
+    isExcluded(name: string): boolean;
+    /**
+     * The resolved exclusion set as a frozen array, for consumer introspection.
+     *
+     * @returns {readonly string[]} The method names that bypass evaluation, in insertion order.
+     */
+    getExclusions(): readonly string[];
     /**
      * Registers one or more policies. Synchronously throws on validation failures.
      * Validation runs to completion before any registry mutation, so a failure
@@ -27,7 +45,10 @@ export default class PolicyEngine {
      * @param {Policy | Policy[]} policies - A single policy or array of policies to register.
      * @param {RegisterPolicyOptions} [options] - Settings applied to the policies this call registers, such as `conditionTimeoutMs`.
      * @param {RegistrationContext} [registrationContext] - Optional set of registered wallet identifiers. When provided, the engine verifies every wallet binding referenced by the policies is in the set before touching the registry.
-     * @throws {PolicyConfigurationError} If any policy or option fails schema validation, the input is an empty array, or a policy binds to a wallet not present in `registrationContext.knownWallets`.
+     * @throws {PolicyConfigurationError} If any policy or option fails schema validation.
+     * @throws {PolicyConfigurationError} If `policies` is an empty array.
+     * @throws {PolicyConfigurationError} If a policy binds to a wallet not present in `registrationContext.knownWallets`.
+     * @throws {PolicyConfigurationError} If a rule addresses a method in the resolved exclusion set.
      */
     register(policies: Policy | Policy[], options?: RegisterPolicyOptions, registrationContext?: RegistrationContext): void;
     /**
@@ -70,10 +91,12 @@ export type PolicyAction = "ALLOW" | "DENY";
  */
 export type PolicyScope = "project" | "account";
 /**
- * A wrapped operation name from the supported set, or `*` to match any wrapped operation.
- * Each name must match an actual method on `IWalletAccount` or a registered protocol.
+ * The name of a governed method, or `*` to match any of them. Every callable a
+ * wallet or protocol exposes is governed unless it appears in the engine's
+ * exclusion set, so this is any method name rather than a fixed set. A name
+ * that matches nothing on the account registers fine and never fires.
  */
-export type PolicyOperation = "sendTransaction" | "signTransaction" | "transfer" | "approve" | "sign" | "signTypedData" | "signAuthorization" | "delegate" | "revokeDelegation" | "swap" | "bridge" | "supply" | "withdraw" | "borrow" | "repay" | "buy" | "sell" | "swidge" | "createDepositAddress" | "renewDepositAddress" | "recoverDepositAddress" | "disableDepositAddress" | "*";
+export type PolicyOperation = string;
 /**
  * The frozen context object passed to every condition function during evaluation.
  */
@@ -197,6 +220,10 @@ export type PolicyEngineOptions = {
      * - Upper bound, in milliseconds, on the per-condition timeout any single policy can be given. Defaults to 30000. A policy registered with a larger `conditionTimeoutMs` is capped to this value rather than rejected.
      */
     maxConditionTimeoutMs?: number;
+    /**
+     * - Method names to hand through ungoverned, unioned with `DEFAULT_POLICY_EXCLUSIONS`. Append-only: entries cannot be removed from the defaults. Names that match nothing on any registered wallet are accepted without error.
+     */
+    policyExclusions?: string[];
 };
 /**
  * One row in a simulation trace: the rule that was evaluated, its scope,

@@ -17,9 +17,11 @@ export default class WDK {
      * Creates a new WDK.
      *
      * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase.
-     * @param {WdkOptions} [options] - Instance-level settings such as `maxConditionTimeoutMs`.
+     * @param {WdkOptions} [options] - Instance-level settings such as `maxConditionTimeoutMs` and `policyExclusions`.
      * @throws {Error} If the seed is not valid.
-     * @throws {PolicyConfigurationError} If `options` is not a plain object or `maxConditionTimeoutMs` is not a finite positive number.
+     * @throws {PolicyConfigurationError} If `options` is not a plain object.
+     * @throws {PolicyConfigurationError} If `maxConditionTimeoutMs` is not a finite positive number.
+     * @throws {PolicyConfigurationError} If `policyExclusions` is not an array of non-empty strings.
      */
     constructor(seed: string | Uint8Array, options?: WdkOptions);
     /** @private */
@@ -70,6 +72,17 @@ export default class WDK {
      * @returns {WDK} The WDK.
      */
     registerMiddleware(blockchain: string, middleware: MiddlewareFunction): WDK;
+    /**
+     * Returns the resolved set of method names the policy proxy hands through
+     * without consulting the engine — `DEFAULT_POLICY_EXCLUSIONS` unioned with
+     * any `policyExclusions` passed to the constructor.
+     *
+     * Every other callable on a governed account is evaluated, so this list is
+     * the complete inventory of what policies cannot gate on this instance.
+     *
+     * @returns {readonly string[]} The frozen resolved exclusion set. Mutating the return value does not affect the engine.
+     */
+    getPolicyExclusions(): readonly string[];
     /**
      * Registers one or more transaction policies that will be evaluated before
      * any wrapped account or protocol method is allowed to execute.
@@ -159,6 +172,10 @@ export type WdkOptions = {
      * - Upper bound, in milliseconds, on the per-condition timeout any single policy can be given through `registerPolicy`. Defaults to 30000. A policy registered with a larger `conditionTimeoutMs` is capped to this value rather than rejected.
      */
     maxConditionTimeoutMs?: number;
+    /**
+     * - Additional method names the policy proxy hands through without evaluating, unioned with `DEFAULT_POLICY_EXCLUSIONS`. Append-only — defaults cannot be removed. Names that match nothing on any registered wallet are accepted without error, so an exclusion can be added ahead of the wallet version that introduces the method.
+     */
+    policyExclusions?: string[];
 };
 import WalletManager from '@tetherto/wdk-wallet';
 import { SwapProtocol } from '@tetherto/wdk-wallet/protocols';

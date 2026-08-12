@@ -30,6 +30,10 @@ const PROTOCOL_GETTERS = [
   'getSdaProtocol'
 ]
 
+const EMPTY_METHODS = new Map()
+
+const governedMethodCache = new WeakMap()
+
 function isProtectedMember (prop) {
   return prop === 'keyPair' || (typeof prop === 'string' && prop.startsWith('_'))
 }
@@ -247,25 +251,78 @@ function buildEnforcedMethod (name, boundOriginal, ctx) {
  * happens to return a function is not a method, and evaluating one for
  * classification could throw or have side effects.
  *
+ * Own members are collected fresh on every call and shadow inherited ones,
+ * because they vary per instance — the WDK installs `registerProtocol` and the
+ * protocol getters directly onto each account. Only the prototype chain is
+ * cached; see {@link inheritedGovernedMethods}.
+ *
  * @param {object} subject - The account or protocol whose surface is being governed.
- * @param {Set<string>} exclusions - Method names to hand through ungoverned.
- * @returns {string[]} The method names to wrap in enforced versions.
+ * @param {PolicyEngine} engine - The engine whose exclusion set decides what is skipped.
+ * @returns {Map<string, Function>} The methods to wrap, keyed by name, valued by the unbound function.
  */
 function collectGovernedMethods (subject, engine) {
   const methods = new Map()
 
-  for (let o = subject; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
-    for (const [name, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(o))) {
-      if (methods.has(name)) continue
-      if (name === 'constructor' || isProtectedMember(name)) continue
-      if (engine.isExcluded(name)) continue
-      if (typeof descriptor.value !== 'function') continue
+  collectCallableMembers(subject, engine, methods)
 
-      methods.set(name, descriptor.value)
-    }
+  for (const [name, method] of inheritedGovernedMethods(Object.getPrototypeOf(subject), engine)) {
+    if (!methods.has(name)) methods.set(name, method)
   }
 
   return methods
+}
+
+/**
+ * Returns the governed methods reachable from a prototype, memoised per
+ * (engine, prototype) pair.
+ *
+ * The result is a pure function of the prototype chain and the engine's
+ * exclusion set, and the exclusion set is fixed at construction — so every
+ * instance of a class resolves to the same answer. That matters because
+ * `account.getLendingProtocol(label)` builds a fresh protocol instance per
+ * call, and re-walking its chain on each one was the dominant cost of the
+ * idiomatic `getXProtocol(label).verb(...)` shape.
+ *
+ * Cached functions are unbound; the caller binds them to its own instance.
+ *
+ * @param {object | null} prototype - The prototype to start from, or null.
+ * @param {PolicyEngine} engine - The engine whose exclusion set decides what is skipped.
+ * @returns {Map<string, Function>} The inherited governed methods. Shared — callers must not mutate it.
+ */
+function inheritedGovernedMethods (prototype, engine) {
+  if (prototype === null || prototype === Object.prototype) return EMPTY_METHODS
+
+  let perPrototype = governedMethodCache.get(engine)
+
+  if (perPrototype === undefined) {
+    perPrototype = new WeakMap()
+    governedMethodCache.set(engine, perPrototype)
+  }
+
+  let methods = perPrototype.get(prototype)
+
+  if (methods === undefined) {
+    methods = new Map()
+
+    for (let o = prototype; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
+      collectCallableMembers(o, engine, methods)
+    }
+
+    perPrototype.set(prototype, methods)
+  }
+
+  return methods
+}
+
+function collectCallableMembers (subject, engine, methods) {
+  for (const [name, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(subject))) {
+    if (methods.has(name)) continue
+    if (name === 'constructor' || isProtectedMember(name)) continue
+    if (engine.isExcluded(name)) continue
+    if (typeof descriptor.value !== 'function') continue
+
+    methods.set(name, descriptor.value)
+  }
 }
 
 function wrapProtocolInProxy (protocol, ctx) {

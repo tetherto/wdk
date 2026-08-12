@@ -3073,6 +3073,33 @@ describe('WDK — policy engine', () => {
       expect(await returned).toBe('plain-sync-value')
     })
 
+    test('two instances of the same class governed by engines with different exclusions do not share a resolution', async () => {
+      class SharedProto {
+        async syncWalletBalance () { return 'synced' }
+        async payLightningInvoice () { return payInheritedMock() }
+      }
+
+      getAccountMock.mockImplementation(async () => Object.assign(new SharedProto(), buildAccount()))
+
+      const strict = new WDK(SEED_PHRASE)
+      const lenient = new WDK(SEED_PHRASE, { policyExclusions: ['syncWalletBalance'] })
+
+      for (const instance of [strict, lenient]) {
+        instance
+          .registerWallet('spark', WalletManagerMock, {})
+          .registerPolicy(projectAllowAll('p'))
+      }
+
+      const strictAccount = await strict.getAccount('spark', 0)
+      const lenientAccount = await lenient.getAccount('spark', 0)
+
+      const strictErr = await catchAsync(() => strictAccount.syncWalletBalance())
+
+      expect(strictErr.name).toBe('PolicyViolationError')
+      expect(strictErr.reason).toBe('no-applicable-rule')
+      expect(await lenientAccount.syncWalletBalance()).toBe('synced')
+    })
+
     test('a prototype method shadowed by an own accessor is bound without invoking the accessor', async () => {
       let reads = 0
 

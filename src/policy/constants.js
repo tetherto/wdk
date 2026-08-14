@@ -49,6 +49,15 @@ export const SCOPES = ['project', 'account']
 
 export const ACTIONS = ['ALLOW', 'DENY']
 
+// Machine-readable discriminators for why the engine blocked an operation,
+// surfaced as PolicyViolationError.code. The two no-match codes are what the
+// default-deny hint keys off; RULE_DENIED means a DENY rule actually fired.
+export const DENIAL_CODES = {
+  RULE_DENIED: 'RULE_DENIED',
+  NO_APPLICABLE_RULE: 'NO_APPLICABLE_RULE',
+  GOVERNED_BUT_UNMATCHED: 'GOVERNED_BUT_UNMATCHED'
+}
+
 export const PROTOCOL_METHODS = {
   swap: ['swap'],
   bridge: ['bridge'],

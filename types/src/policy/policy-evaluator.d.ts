@@ -1,5 +1,6 @@
 /** @typedef {import('./policy-engine.js').PolicyContext} PolicyContext */
 /** @typedef {import('./policy-engine.js').SimulationTraceEntry} SimulationTraceEntry */
+/** @typedef {import('./policy-error.js').DenialCode} DenialCode */
 /** @typedef {import('./policy-registry.js').PolicyGroups} PolicyGroups */
 /**
  * The internal verdict produced by `evaluate()`: ALLOW or BLOCK, plus
@@ -10,6 +11,7 @@
  * @property {string | null} policyId - Id of the policy that produced the verdict, or null when no rule addresses the operation (`no-applicable-rule`) or matched (`governed-but-unmatched`).
  * @property {string | null} ruleName - Name of the rule that matched, or null.
  * @property {string | null} reason - Human-readable reason (rule.reason or one of `matched` / `override` / `no-applicable-rule` / `governed-but-unmatched`).
+ * @property {DenialCode | null} code - Which denial path produced a BLOCK, or null on ALLOW.
  * @property {SimulationTraceEntry[]} trace - Per-rule evaluation outcomes in order.
  */
 /**
@@ -25,6 +27,7 @@
 export function evaluate(context: PolicyContext, groups: PolicyGroups): Promise<Verdict>;
 export type PolicyContext = import("./policy-engine.js").PolicyContext;
 export type SimulationTraceEntry = import("./policy-engine.js").SimulationTraceEntry;
+export type DenialCode = import("./policy-error.js").DenialCode;
 export type PolicyGroups = import("./policy-registry.js").PolicyGroups;
 /**
  * The internal verdict produced by `evaluate()`: ALLOW or BLOCK, plus
@@ -47,6 +50,10 @@ export type Verdict = {
      * - Human-readable reason (rule.reason or one of `matched` / `override` / `no-applicable-rule` / `governed-but-unmatched`).
      */
     reason: string | null;
+    /**
+     * - Which denial path produced a BLOCK, or null on ALLOW.
+     */
+    code: DenialCode | null;
     /**
      * - Per-rule evaluation outcomes in order.
      */

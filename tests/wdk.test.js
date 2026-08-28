@@ -47,6 +47,21 @@ describe('WDK', () => {
     wdk = new WDK(SEED_PHRASE)
   })
 
+  describe('isValidSeed', () => {
+    test('accepts raw seeds whose length is a multiple of 32 bits', () => {
+      expect(WDK.isValidSeed(new Uint8Array(16))).toBe(true)
+      expect(WDK.isValidSeed(new Uint8Array(20))).toBe(true)
+      expect(WDK.isValidSeed(new Uint8Array(64))).toBe(true)
+    })
+
+    test('rejects raw seeds whose length is not a multiple of 32 bits', () => {
+      expect(WDK.isValidSeed(new Uint8Array(17))).toBe(false)
+      expect(WDK.isValidSeed(new Uint8Array(63))).toBe(false)
+      expect(WDK.isValidSeed(new Uint8Array(15))).toBe(false)
+      expect(WDK.isValidSeed(new Uint8Array(65))).toBe(false)
+    })
+  })
+
   describe('getAccount', () => {
     beforeEach(() => {
       getAccountMock.mockResolvedValue(DUMMY_ACCOUNT)

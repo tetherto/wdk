@@ -113,7 +113,7 @@ export default class WDK {
    */
   static isValidSeed (seed) {
     if (seed instanceof Uint8Array) {
-      return seed.length >= 16 && seed.length <= 64
+      return seed.length >= 16 && seed.length <= 64 && seed.length % 4 === 0
     }
 
     return WalletManager.isValidSeedPhrase(seed)

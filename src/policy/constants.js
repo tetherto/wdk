@@ -104,3 +104,5 @@ export const WILDCARD = '*'
 export const SCOPES = ['project', 'account']
 
 export const ACTIONS = ['ALLOW', 'DENY']
+
+export const DEFAULT_CONDITION_TIMEOUT_MS = 30_000

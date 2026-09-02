@@ -44,4 +44,4 @@
 /** @typedef {import('./src/policy/index.js').PolicyAdapterErrorOptions} PolicyAdapterErrorOptions */
 
 export { default } from './src/wdk.js'
-export { PolicyViolationError, PolicyConfigurationError, PolicyAdapterError, AdapterRegistry, coerceAmount, TransactionPolicy } from './src/policy/index.js'
+export { PolicyViolationError, PolicyConfigurationError, PolicyAdapterError, AdapterRegistry, coerceAmount, TransactionPolicy, RulePolicy } from './src/policy/index.js'

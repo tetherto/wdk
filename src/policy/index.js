@@ -47,3 +47,4 @@ export { default as PolicyViolationError, PolicyConfigurationError, PolicyAdapte
 export { default as AdapterRegistry } from './adapter-registry.js'
 export { coerceAmount } from './coerce.js'
 export { default as TransactionPolicy } from './transaction-policy.js'
+export { default as RulePolicy } from './rule-policy.js'

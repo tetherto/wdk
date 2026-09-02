@@ -34,5 +34,14 @@
 /** @typedef {import('./src/policy/index.js').SimulationTraceEntry} SimulationTraceEntry */
 /** @typedef {import('./src/policy/index.js').RegisterPolicyOptions} RegisterPolicyOptions */
 
+/** @typedef {import('./src/policy/index.js').OperationRecord} OperationRecord */
+/** @typedef {import('./src/policy/index.js').OperationRaw} OperationRaw */
+/** @typedef {import('./src/policy/index.js').CanonicalOperationKind} CanonicalOperationKind */
+/** @typedef {import('./src/policy/index.js').Adapter} Adapter */
+/** @typedef {import('./src/policy/index.js').Extractor} Extractor */
+/** @typedef {import('./src/policy/index.js').InterpretRequest} InterpretRequest */
+/** @typedef {import('./src/policy/index.js').TransactionPolicyVerdict} TransactionPolicyVerdict */
+/** @typedef {import('./src/policy/index.js').PolicyAdapterErrorOptions} PolicyAdapterErrorOptions */
+
 export { default } from './src/wdk.js'
-export { PolicyViolationError, PolicyConfigurationError } from './src/policy/index.js'
+export { PolicyViolationError, PolicyConfigurationError, PolicyAdapterError, AdapterRegistry, coerceAmount, TransactionPolicy } from './src/policy/index.js'

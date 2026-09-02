@@ -34,4 +34,16 @@
 /** @typedef {import('./policy-engine.js').SimulationTraceEntry} SimulationTraceEntry */
 /** @typedef {import('./policy-engine.js').RegisterPolicyOptions} RegisterPolicyOptions */
 
-export { default as PolicyViolationError, PolicyConfigurationError } from './policy-error.js'
+/** @typedef {import('./operation-record.js').OperationRecord} OperationRecord */
+/** @typedef {import('./operation-record.js').OperationRaw} OperationRaw */
+/** @typedef {import('./operation-record.js').CanonicalOperationKind} CanonicalOperationKind */
+/** @typedef {import('./adapter-registry.js').Adapter} Adapter */
+/** @typedef {import('./adapter-registry.js').Extractor} Extractor */
+/** @typedef {import('./adapter-registry.js').InterpretRequest} InterpretRequest */
+/** @typedef {import('./transaction-policy.js').TransactionPolicyVerdict} TransactionPolicyVerdict */
+/** @typedef {import('./policy-error.js').PolicyAdapterErrorOptions} PolicyAdapterErrorOptions */
+
+export { default as PolicyViolationError, PolicyConfigurationError, PolicyAdapterError } from './policy-error.js'
+export { default as AdapterRegistry } from './adapter-registry.js'
+export { coerceAmount } from './coerce.js'
+export { default as TransactionPolicy } from './transaction-policy.js'

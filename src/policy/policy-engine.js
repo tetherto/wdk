@@ -14,6 +14,7 @@
 
 'use strict'
 
+import { DEFAULT_CONDITION_TIMEOUT_MS } from './constants.js'
 import { createPolicyEnforcedAccount } from './policy-account-proxy.js'
 import { PolicyConfigurationError } from './policy-error.js'
 import { evaluate } from './policy-evaluator.js'
@@ -165,8 +166,6 @@ import {
  * @typedef {Object} RegistrationContext
  * @property {Set<string>} [knownWallets] - Set of wallet identifiers the host considers registered. When provided, the engine throws if any policy binds to a wallet not in the set.
  */
-
-const DEFAULT_CONDITION_TIMEOUT_MS = 30_000
 
 const DEFAULT_MAX_CONDITION_TIMEOUT_MS = 30_000
 

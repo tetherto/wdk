@@ -24,4 +24,4 @@ export type Extractor = import("./src/policy/index.js").Extractor;
 export type InterpretRequest = import("./src/policy/index.js").InterpretRequest;
 export type TransactionPolicyVerdict = import("./src/policy/index.js").TransactionPolicyVerdict;
 export type PolicyAdapterErrorOptions = import("./src/policy/index.js").PolicyAdapterErrorOptions;
-export { PolicyViolationError, PolicyConfigurationError, PolicyAdapterError, AdapterRegistry, coerceAmount, TransactionPolicy } from "./src/policy/index.js";
+export { PolicyViolationError, PolicyConfigurationError, PolicyAdapterError, AdapterRegistry, coerceAmount, TransactionPolicy, RulePolicy } from "./src/policy/index.js";

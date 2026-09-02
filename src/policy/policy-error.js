@@ -85,3 +85,51 @@ export class PolicyConfigurationError extends Error {
     this.name = 'PolicyConfigurationError'
   }
 }
+
+/**
+ * Structured context for a `PolicyAdapterError`.
+ *
+ * @typedef {Object} PolicyAdapterErrorOptions
+ * @property {string}  [walletType] - The wallet identifier the failing call was made against.
+ * @property {string}  [method]     - The method name that was being interpreted.
+ * @property {unknown} [cause]      - The underlying error thrown by the extractor, if any.
+ */
+
+/**
+ * Error type produced when an adapter fails to produce a usable
+ * `OperationRecord`: the extractor threw, or it returned a malformed record
+ * (no `kind`). The engine treats this as fail-closed and denies the call. It
+ * is deliberately distinct from "no adapter registered" (which `interpret`
+ * reports as `null`) so callers can tell configuration gaps from runtime
+ * faults.
+ */
+export class PolicyAdapterError extends Error {
+  #walletType
+  #method
+
+  /**
+   * Constructs the error with a description and optional structured context.
+   *
+   * @param {string} message - Human-readable description of the failure.
+   * @param {PolicyAdapterErrorOptions} [options] - Structured context.
+   */
+  constructor (message, options = {}) {
+    super(message, options.cause !== undefined ? { cause: options.cause } : undefined)
+
+    this.name = 'PolicyAdapterError'
+    this.#walletType = options.walletType
+    this.#method = options.method
+  }
+
+  /**
+   * The wallet identifier the failing call was made against, when known.
+   * @returns {string | undefined}
+   */
+  get walletType () { return this.#walletType }
+
+  /**
+   * The method name that was being interpreted, when known.
+   * @returns {string | undefined}
+   */
+  get method () { return this.#method }
+}

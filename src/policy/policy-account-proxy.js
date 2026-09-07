@@ -18,8 +18,22 @@ import { buildContext, snapshotArgs } from './policy-context.js'
 import PolicyViolationError, { PolicyConfigurationError } from './policy-error.js'
 
 /** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
+/** @typedef {import('@tetherto/wdk-wallet').IWalletAccountReadOnly} IWalletAccountReadOnly */
 /** @typedef {import('./policy-engine.js').default} PolicyEngine */
 /** @typedef {import('./policy-engine.js').WrapContext} WrapContext */
+
+/**
+ * The per-account state every enforced method closes over. Built once per
+ * `createPolicyEnforcedAccount` call and shared by all of that account's
+ * wrapped methods.
+ *
+ * @typedef {Object} EnforcementContext
+ * @property {IWalletAccount} account - The raw account, read for its derivation path when resolving account-scope bindings.
+ * @property {IWalletAccountReadOnly} readOnlyAccount - The read-only view handed to condition functions as `context.account`.
+ * @property {string} blockchain - The wallet identifier (the same string passed to `registerWallet`).
+ * @property {number | undefined} index - The index passed to `wdk.getAccount(wallet, index)`, when the account was retrieved that way.
+ * @property {PolicyEngine} engine - The engine that evaluates each intercepted call.
+ */
 
 const PROTOCOL_GETTERS = [
   'getSwapProtocol',
@@ -224,7 +238,7 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
  *
  * @param {string} name - The operation name being wrapped.
  * @param {Function} boundOriginal - The underlying method, pre-bound to its subject.
- * @param {object} ctx - The per-account routing context shared by every wrapped method.
+ * @param {EnforcementContext} ctx - The per-account state shared by every wrapped method.
  * @returns {Function} The enforced method, which throws {@link PolicyViolationError} on a BLOCK verdict and {@link PolicyConfigurationError} if an argument is not structured-cloneable.
  */
 function buildEnforcedMethod (name, boundOriginal, ctx) {

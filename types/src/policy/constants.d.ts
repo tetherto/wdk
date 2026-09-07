@@ -2,8 +2,8 @@ export const DEFAULT_POLICY_EXCLUSIONS: readonly string[];
 export const WILDCARD: "*";
 export const SCOPES: string[];
 export const ACTIONS: string[];
-export namespace DENIAL_CODES {
-    let RULE_DENIED: string;
-    let NO_APPLICABLE_RULE: string;
-    let GOVERNED_BUT_UNMATCHED: string;
-}
+export const DENIAL_CODES: Readonly<{
+    RULE_DENIED: "RULE_DENIED";
+    NO_APPLICABLE_RULE: "NO_APPLICABLE_RULE";
+    GOVERNED_BUT_UNMATCHED: "GOVERNED_BUT_UNMATCHED";
+}>;

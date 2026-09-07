@@ -6,7 +6,7 @@ import WalletManager from '@tetherto/wdk-wallet'
 
 import { BridgeProtocol, LendingProtocol, SdaProtocol, SwapProtocol, SwidgeProtocol } from '@tetherto/wdk-wallet/protocols'
 
-import WDK, { DEFAULT_POLICY_EXCLUSIONS, PolicyConfigurationError, PolicyViolationError } from '../index.js'
+import WDK, { DEFAULT_POLICY_EXCLUSIONS, DENIAL_CODES, PolicyConfigurationError, PolicyViolationError } from '../index.js'
 
 const SEED_PHRASE = 'cook voyage document eight skate token alien guide drink uncle term abuse'
 
@@ -1665,6 +1665,7 @@ describe('WDK — policy engine', () => {
       const result = await account.simulate.sendTransaction({ to: RECIPIENT, value: 3n })
 
       expect(result.decision).toBe('ALLOW')
+      expect(result.code).toBeNull()
       expect(result.policy_id).toBe('cap')
       expect(result.matched_rule).toBe('allow-small')
       expect(result.reason).toBe('matched')
@@ -1689,6 +1690,7 @@ describe('WDK — policy engine', () => {
       const result = await account.simulate.sendTransaction({ to: RECIPIENT, value: 1n })
 
       expect(result.decision).toBe('DENY')
+      expect(result.code).toBe(DENIAL_CODES.RULE_DENIED)
       expect(result.policy_id).toBe('block-eth')
       expect(result.matched_rule).toBe('deny-all')
       expect(result.reason).toBe('deny-all')
@@ -1713,12 +1715,64 @@ describe('WDK — policy engine', () => {
       const simSend = await account.simulate.sendTransaction({ to: RECIPIENT, value: 1n })
 
       expect(simSign.decision).toBe('DENY')
+      expect(simSign.code).toBe(DENIAL_CODES.NO_APPLICABLE_RULE)
       expect(simSign.policy_id).toBeNull()
       expect(simSign.matched_rule).toBeNull()
       expect(simSign.reason).toBe('no-applicable-rule')
       expect(simSend.decision).toBe('ALLOW')
+      expect(simSend.code).toBeNull()
       expect(simSend.policy_id).toBe('only-send')
       expect(signMock).not.toHaveBeenCalled()
+    })
+
+    test('simulate.<method> reports the same code the thrown PolicyViolationError carries, on every denial path', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'block-eth',
+          name: 'block-eth',
+          scope: 'project',
+          rules: [
+            { name: 'deny-all-sends', operation: 'sendTransaction', action: 'DENY', conditions: [] },
+            { name: 'deny-sanctioned', operation: 'transfer', action: 'DENY', conditions: [({ args }) => args[0].recipient === SANCTIONED] }
+          ]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+
+      const ruleDenied = await account.simulate.sendTransaction({ to: RECIPIENT, value: 1n })
+      const ruleDeniedThrown = await account.sendTransaction({ to: RECIPIENT, value: 1n }).catch((err) => err)
+      const unmatched = await account.simulate.transfer({ token: TOKEN, recipient: RECIPIENT, amount: 1n })
+      const unmatchedThrown = await account.transfer({ token: TOKEN, recipient: RECIPIENT, amount: 1n }).catch((err) => err)
+      const unaddressed = await account.simulate.sign('hello')
+      const unaddressedThrown = await account.sign('hello').catch((err) => err)
+
+      expect(ruleDenied.code).toBe(DENIAL_CODES.RULE_DENIED)
+      expect(ruleDeniedThrown).toBeInstanceOf(PolicyViolationError)
+      expect(ruleDeniedThrown.code).toBe(ruleDenied.code)
+
+      expect(unmatched.code).toBe(DENIAL_CODES.GOVERNED_BUT_UNMATCHED)
+      expect(unmatchedThrown).toBeInstanceOf(PolicyViolationError)
+      expect(unmatchedThrown.code).toBe(unmatched.code)
+
+      expect(unaddressed.code).toBe(DENIAL_CODES.NO_APPLICABLE_RULE)
+      expect(unaddressedThrown).toBeInstanceOf(PolicyViolationError)
+      expect(unaddressedThrown.code).toBe(unaddressed.code)
+
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+      expect(transferMock).not.toHaveBeenCalled()
+      expect(signMock).not.toHaveBeenCalled()
+    })
+
+    test('DENIAL_CODES is exported, frozen, and its members are the literal codes', () => {
+      expect(Object.isFrozen(DENIAL_CODES)).toBe(true)
+      expect(DENIAL_CODES).toEqual({
+        RULE_DENIED: 'RULE_DENIED',
+        NO_APPLICABLE_RULE: 'NO_APPLICABLE_RULE',
+        GOVERNED_BUT_UNMATCHED: 'GOVERNED_BUT_UNMATCHED'
+      })
     })
   })
 

@@ -33,6 +33,7 @@
 /** @typedef {import('./policy-engine.js').SimulationResult} SimulationResult */
 /** @typedef {import('./policy-engine.js').SimulationTraceEntry} SimulationTraceEntry */
 /** @typedef {import('./policy-engine.js').RegisterPolicyOptions} RegisterPolicyOptions */
+/** @typedef {import('./policy-error.js').DenialCode} DenialCode */
 
 export { default as PolicyViolationError, PolicyConfigurationError } from './policy-error.js'
-export { DEFAULT_POLICY_EXCLUSIONS } from './constants.js'
+export { DEFAULT_POLICY_EXCLUSIONS, DENIAL_CODES } from './constants.js'

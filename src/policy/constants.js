@@ -106,10 +106,13 @@ export const SCOPES = ['project', 'account']
 export const ACTIONS = ['ALLOW', 'DENY']
 
 // Machine-readable discriminators for why the engine blocked an operation,
-// surfaced as PolicyViolationError.code. The two no-match codes are what the
-// default-deny hint keys off; RULE_DENIED means a DENY rule actually fired.
-export const DENIAL_CODES = {
+// surfaced as PolicyViolationError.code and SimulationResult.code. The two
+// no-match codes are what the default-deny hint keys off; RULE_DENIED means a
+// DENY rule actually fired. Frozen for the same reason DEFAULT_POLICY_EXCLUSIONS
+// is: it is exported publicly, and a consumer reassigning a member would change
+// what every engine in the process reports.
+export const DENIAL_CODES = Object.freeze({
   RULE_DENIED: 'RULE_DENIED',
   NO_APPLICABLE_RULE: 'NO_APPLICABLE_RULE',
   GOVERNED_BUT_UNMATCHED: 'GOVERNED_BUT_UNMATCHED'
-}
+})

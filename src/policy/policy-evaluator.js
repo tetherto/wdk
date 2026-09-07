@@ -24,7 +24,7 @@ import { ruleAddressesOperation } from './policy-validators.js'
 
 /**
  * The internal verdict produced by `evaluate()`: ALLOW or BLOCK, plus
- * the identifying triple and a per-rule trace.
+ * the identifying set and a per-rule trace.
  *
  * @typedef {Object} Verdict
  * @property {'ALLOW' | 'BLOCK'} outcome - The evaluation outcome.

@@ -139,7 +139,8 @@ import {
  *
  * @typedef {Object} SimulationResult
  * @property {'ALLOW' | 'DENY'} decision - The verdict the engine would produce for this context.
- * @property {DenialCode | null} code - Which denial path produced a DENY, or null on ALLOW. The same value the thrown `PolicyViolationError.code` would carry for this context.
+ * @property {DenialCode | null} code - Which denial path produced a DENY, or null on ALLOW. The same value the
+ *   thrown `PolicyViolationError.code` would carry for this context.
  * @property {string | null} policy_id - Id of the policy whose rule produced the verdict, or null when no rule addresses the operation (`no-applicable-rule`) or matched (`governed-but-unmatched`).
  * @property {string | null} matched_rule - Name of the matching rule, or null when no rule matched.
  * @property {string | null} reason - Human-readable explanation: the rule's `reason` field, or one of `matched` / `override` / `no-applicable-rule` / `governed-but-unmatched`.

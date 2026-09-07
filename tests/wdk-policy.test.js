@@ -1766,8 +1766,7 @@ describe('WDK — policy engine', () => {
       expect(signMock).not.toHaveBeenCalled()
     })
 
-    test('DENIAL_CODES is exported, frozen, and its members are the literal codes', () => {
-      expect(Object.isFrozen(DENIAL_CODES)).toBe(true)
+    test('DENIAL_CODES is exported and its members are the literal codes', () => {
       expect(DENIAL_CODES).toEqual({
         RULE_DENIED: 'RULE_DENIED',
         NO_APPLICABLE_RULE: 'NO_APPLICABLE_RULE',

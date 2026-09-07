@@ -31,7 +31,8 @@ import PolicyViolationError, { PolicyConfigurationError } from './policy-error.j
  * @property {IWalletAccount} account - The raw account, read for its derivation path when resolving account-scope bindings.
  * @property {IWalletAccountReadOnly} readOnlyAccount - The read-only view handed to condition functions as `context.account`.
  * @property {string} blockchain - The wallet identifier (the same string passed to `registerWallet`).
- * @property {number | undefined} index - The index passed to `wdk.getAccount(wallet, index)`, when the account was retrieved that way.
+ * @property {number | undefined} index - The index passed to `wdk.getAccount(wallet, index)`, when the account
+ *   was retrieved that way.
  * @property {PolicyEngine} engine - The engine that evaluates each intercepted call.
  */
 

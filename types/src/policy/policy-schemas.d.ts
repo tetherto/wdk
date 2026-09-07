@@ -51,11 +51,7 @@ export const policySchema: z.ZodObject<{
     rules: z.ZodArray<z.ZodObject<{
         name: z.ZodString;
         reason: z.ZodOptional<z.ZodString>;
-        operation: z.ZodUnion<readonly [z.ZodEnum<{
-            [x: string]: string;
-        }>, z.ZodArray<z.ZodEnum<{
-            [x: string]: string;
-        }>>]>;
+        operation: z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>;
         action: z.ZodEnum<{
             [x: string]: string;
         }>;
@@ -78,6 +74,7 @@ export const registerOptionsSchema: z.ZodOptional<z.ZodObject<{
  */
 export const engineOptionsSchema: z.ZodOptional<z.ZodObject<{
     maxConditionTimeoutMs: z.ZodOptional<z.ZodNumber>;
+    policyExclusions: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>>;
 export type ZodError = import("zod").ZodError;
 export type Policy = import("./policy-engine.js").Policy;

@@ -127,9 +127,56 @@ Index positionally against the operation's real signature, and remember that tra
 > conditions: [({ args }) => args[0].to === '0x…']
 > ```
 
+### Method coverage
+
+Coverage is **deny-by-default at the proxy layer**. The engine does not carry a list of methods it governs; it carries a list of methods it *doesn't*, and governs everything else.
+
+That inversion is deliberate. Under an inclusion list, a wallet method the list has never heard of — a newly shipped `payLightningInvoice`, say — passes straight through to the signer with no evaluation and no error. The policy silently does not apply. Under deny-by-default the same unknown method is governed, so the worst case is a loud `PolicyViolationError` telling you to write a rule, instead of an unpoliced transfer.
+
+```js
+import { DEFAULT_POLICY_EXCLUSIONS } from '@tetherto/wdk'
+```
+
+`DEFAULT_POLICY_EXCLUSIONS` is a frozen array of method names that bypass the engine: balance and allowance lookups, `quote*` estimates, protocol capability queries, and lifecycle methods like `dispose` and `toReadOnlyAccount`. Its contents come from an audit of every `wdk-wallet-*` and `wdk-protocol-*` package in the org — see [`docs/policy-exclusions-audit.md`](docs/policy-exclusions-audit.md), which records how each method was classified and why. Anything absent from that list is governed.
+
+Three rules worth knowing:
+
+- **Accessors are never intercepted.** Only callable methods are wrapped, and the proxy classifies members through their property descriptors, so a getter is never invoked just to decide whether to wrap it.
+- **Inherited methods are governed.** The proxy walks the prototype chain, so a method declared on a base account class is intercepted the same as an own method.
+- **Accounts with no policies registered are untouched.** The proxy is not applied at all, so ungoverned use costs nothing.
+- **Governed calls are asynchronous.** Evaluation is async, so a governed method returns a Promise even if the underlying method is synchronous. Every value-moving method in the WDK wallet packages is already `async`; if you call a synchronous method on a governed account, `await` it.
+- **Governed arguments must be structured-cloneable.** The engine snapshots arguments so a caller cannot mutate them between evaluation and execution. An argument carrying a function (a callback, say) throws `PolicyConfigurationError`, and a class instance reaches the wallet as a plain object. Exclude such a method, or keep its arguments plain.
+
+A rule may not name an excluded method: the proxy never wraps one, so the rule could not fire, and `registerPolicy` rejects it with `PolicyConfigurationError` rather than registering a guardrail that silently does nothing.
+
+#### Appending your own exclusions
+
+Some legitimate reads are wallet-specific and did not qualify for the default list. Append them at construction:
+
+```javascript
+const wdk = new WDK(seedPhrase, {
+  policyExclusions: ['syncWalletBalance']
+})
+
+wdk.getPolicyExclusions()  // frozen readonly string[] — defaults ∪ yours
+```
+
+`policyExclusions` is append-only — entries cannot be removed from the defaults, because removing one would gate a read call that consumers reasonably expect to work. Names are matched globally by method name, not per wallet. A name that matches nothing on any registered wallet is accepted without error, so you can add an exclusion ahead of the wallet release that introduces the method.
+
+Spark is the one package in the org shipping a read that needs this: `syncWalletBalance` mutates local state and triggers server-side work, so it is governed by default. `getSingleUseDepositAddress` and `getStaticDepositAddress` are deliberately **not** offered as exclusions despite their `get*` names — both create remote state. If you need them callable, register an `ALLOW` rule so the call is still evaluated and traced.
+
+#### Migrating from the inclusion-list model
+
+Before this change the engine governed a fixed 22-method list. Now it governs everything outside the exclusion set, which means **more methods reach the engine than before**. If you registered policies against the old model:
+
+- Calls that used to pass through unpoliced may now throw `PolicyViolationError` with `reason: 'no-applicable-rule'`. That is the bug being fixed — those calls were never evaluated.
+- For a genuine read the default list missed, add it to `policyExclusions`.
+- For a write you want to permit, register an `ALLOW` rule for it. Prefer this over an exclusion: the call stays evaluated, traced, and visible to `account.simulate`.
+- A rule's `operation` may now name **any** method, not just one of the old 22. Rules for methods like `payLightningInvoice` register and fire normally.
+
 ### Default-deny semantics
 
-The engine is **default-deny on governed accounts**. As soon as any policy applies to an account, the engine wraps every method in `OPERATIONS` (the set of write-facing and signing primitives — `sendTransaction`, `signTransaction`, `transfer`, `approve`, `sign`, `signTypedData`, `signAuthorization`, `delegate`, `revokeDelegation`, and protocol methods like `swap`, `bridge`, `swidge`, etc.) on that account. Any call to a wrapped method whose operation is not addressed by an `ALLOW` rule throws `PolicyViolationError` with `reason: 'no-applicable-rule'`.
+The engine is **default-deny on governed accounts**. As soon as any policy applies to an account, the engine wraps **every callable method on that account**, walking the full prototype chain, except the reads and lifecycle methods listed in the exclusion set (see [Method coverage](#method-coverage)). Any call to a wrapped method whose operation is not addressed by an `ALLOW` rule throws `PolicyViolationError` with `reason: 'no-applicable-rule'`.
 
 This is intentional: a "cap transfer at $100" policy must not be sidesteppable by `sendTransaction({ to: token, data: <ERC-20 transfer calldata> })`, `approve(spender, MAX)`, an off-chain `signTypedData` Permit, or an ERC-7702 `delegate` to an attacker contract. The engine closes those bypasses by treating any unaddressed money-movement op on a governed account as DENY.
 

@@ -16,16 +16,20 @@
 
 import { z } from 'zod'
 
-import { ACTIONS, OPERATIONS, SCOPES, WILDCARD } from './constants.js'
+import { ACTIONS, SCOPES } from './constants.js'
 
 /** @typedef {import('zod').ZodError} ZodError */
 /** @typedef {import('./policy-engine.js').Policy} Policy */
 
-const OPERATION_NAMES = [...OPERATIONS, WILDCARD]
+// Any callable a wallet or protocol exposes can be governed, so a rule may
+// name any method. Validating against a fixed enum would make the newly
+// governed methods unaddressable — a rule for Spark's payLightningInvoice
+// would fail registration while the engine denies every call to it.
+const operationName = z.string().min(1)
 
 const operationField = z.union([
-  z.enum(OPERATION_NAMES),
-  z.array(z.enum(OPERATION_NAMES)).nonempty()
+  operationName,
+  z.array(operationName).nonempty()
 ])
 
 const accountIdentifier = z.union([
@@ -99,7 +103,8 @@ export const registerOptionsSchema = z.object({
  * and `PolicyEngine` constructors.
  */
 export const engineOptionsSchema = z.object({
-  maxConditionTimeoutMs: z.number().finite().positive().optional()
+  maxConditionTimeoutMs: z.number().finite().positive().optional(),
+  policyExclusions: z.array(z.string().min(1)).optional()
 }).optional()
 
 /**

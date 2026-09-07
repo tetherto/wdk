@@ -14,7 +14,6 @@
 
 'use strict'
 
-import { OPERATIONS, PROTOCOL_METHODS } from './constants.js'
 import { buildContext, snapshotArgs } from './policy-context.js'
 import PolicyViolationError, { PolicyConfigurationError } from './policy-error.js'
 
@@ -23,13 +22,17 @@ import PolicyViolationError, { PolicyConfigurationError } from './policy-error.j
 /** @typedef {import('./policy-engine.js').WrapContext} WrapContext */
 
 const PROTOCOL_GETTERS = [
-  ['getSwapProtocol', 'swap'],
-  ['getBridgeProtocol', 'bridge'],
-  ['getLendingProtocol', 'lending'],
-  ['getFiatProtocol', 'fiat'],
-  ['getSwidgeProtocol', 'swidge'],
-  ['getSdaProtocol', 'sda']
+  'getSwapProtocol',
+  'getBridgeProtocol',
+  'getLendingProtocol',
+  'getFiatProtocol',
+  'getSwidgeProtocol',
+  'getSdaProtocol'
 ]
+
+const EMPTY_METHODS = new Map()
+
+const governedMethodCache = new WeakMap()
 
 function isProtectedMember (prop) {
   return prop === 'keyPair' || (typeof prop === 'string' && prop.startsWith('_'))
@@ -162,32 +165,28 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
 
   const substitutions = new Map()
 
-  const enforcedOperations = []
+  // Deny by default: govern every callable the account exposes except the
+  // reads and lifecycle methods in the resolved exclusion set. An inclusion
+  // list leaves any method it forgot silently unpoliced — the failure mode
+  // that let Spark's payLightningInvoice bypass the engine entirely — so the
+  // unknown method is governed and denies loudly instead.
+  const governedMethods = collectGovernedMethods(account, engine)
 
-  // Wrap every method in OPERATIONS that exists on the underlying account,
-  // not just the ones referenced by registered policies. The evaluator
-  // default-denies any operation no rule addresses — without wrapping the
-  // full set we'd leave sibling methods un-intercepted (e.g. a 'cap transfer'
-  // policy would not prevent `sendTransaction({ to: token, data: ... })`
-  // from moving the same tokens).
-  for (const op of OPERATIONS) {
-    if (typeof account[op] === 'function') {
-      enforcedOperations.push(op)
+  const enforcedOperations = [...governedMethods.keys()]
 
-      substitutions.set(op, buildEnforcedMethod(op, account[op].bind(account), ctx))
-    }
+  for (const [op, method] of governedMethods) {
+    substitutions.set(op, buildEnforcedMethod(op, method.bind(account), ctx))
   }
 
-  for (const [getterName, type] of PROTOCOL_GETTERS) {
+  for (const getterName of PROTOCOL_GETTERS) {
     if (typeof account[getterName] !== 'function') continue
 
-    const writeMethods = PROTOCOL_METHODS[type]
     const originalGetter = account[getterName].bind(account)
 
     substitutions.set(getterName, (label) => {
       const protocol = originalGetter(label)
 
-      return wrapProtocolInProxy(protocol, writeMethods, ctx)
+      return wrapProtocolInProxy(protocol, ctx)
     })
   }
 
@@ -242,13 +241,92 @@ function buildEnforcedMethod (name, boundOriginal, ctx) {
   }
 }
 
-function wrapProtocolInProxy (protocol, opsToWrap, ctx) {
+/**
+ * Collects every callable member the subject exposes, walking the full
+ * prototype chain, minus the exclusion set and the members the guarded proxy
+ * already hides.
+ *
+ * Members are read through their property descriptors rather than by access,
+ * so an accessor is classified without ever being invoked: a getter that
+ * happens to return a function is not a method, and evaluating one for
+ * classification could throw or have side effects.
+ *
+ * Own members are collected fresh on every call and shadow inherited ones,
+ * because they vary per instance — the WDK installs `registerProtocol` and the
+ * protocol getters directly onto each account. Only the prototype chain is
+ * cached; see {@link inheritedGovernedMethods}.
+ *
+ * @param {object} subject - The account or protocol whose surface is being governed.
+ * @param {PolicyEngine} engine - The engine whose exclusion set decides what is skipped.
+ * @returns {Map<string, Function>} The methods to wrap, keyed by name, valued by the unbound function.
+ */
+function collectGovernedMethods (subject, engine) {
+  const methods = new Map()
+
+  collectCallableMembers(subject, engine, methods)
+
+  for (const [name, method] of inheritedGovernedMethods(Object.getPrototypeOf(subject), engine)) {
+    if (!methods.has(name)) methods.set(name, method)
+  }
+
+  return methods
+}
+
+/**
+ * Returns the governed methods reachable from a prototype, memoised per
+ * (engine, prototype) pair.
+ *
+ * The result is a pure function of the prototype chain and the engine's
+ * exclusion set, and the exclusion set is fixed at construction — so every
+ * instance of a class resolves to the same answer.
+ *
+ * Cached functions are unbound; the caller binds them to its own instance.
+ *
+ * @param {object | null} prototype - Start of the chain to walk, normally `Object.getPrototypeOf(subject)`. Null and `Object.prototype` short-circuit to an empty result.
+ * @param {PolicyEngine} engine - The engine whose exclusion set decides what is skipped.
+ * @returns {Map<string, Function>} The inherited governed methods. Shared — callers must not mutate it.
+ */
+function inheritedGovernedMethods (prototype, engine) {
+  if (prototype === null || prototype === Object.prototype) return EMPTY_METHODS
+
+  let perPrototype = governedMethodCache.get(engine)
+
+  if (perPrototype === undefined) {
+    perPrototype = new WeakMap()
+    governedMethodCache.set(engine, perPrototype)
+  }
+
+  let methods = perPrototype.get(prototype)
+
+  if (methods === undefined) {
+    methods = new Map()
+
+    for (let o = prototype; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
+      collectCallableMembers(o, engine, methods)
+    }
+
+    perPrototype.set(prototype, methods)
+  }
+
+  return methods
+}
+
+function collectCallableMembers (subject, engine, methods) {
+  for (const [name, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(subject))) {
+    if (methods.has(name)) continue
+    if (name === 'constructor' || isProtectedMember(name)) continue
+    if (engine.isExcluded(name)) continue
+    if (typeof descriptor.value !== 'function') continue
+
+    methods.set(name, descriptor.value)
+  }
+}
+
+function wrapProtocolInProxy (protocol, ctx) {
   const substitutions = new Map()
 
-  for (const method of opsToWrap) {
-    if (typeof protocol[method] === 'function') {
-      substitutions.set(method, buildEnforcedMethod(method, protocol[method].bind(protocol), ctx))
-    }
+  for (const [name, method] of collectGovernedMethods(protocol, ctx.engine)) {
+    substitutions.set(name, buildEnforcedMethod(name, method.bind(protocol), ctx))
   }
 
   return createGuardedProxy(protocol, substitutions)
@@ -270,18 +348,19 @@ function buildSimulateMirror (methodNames, ctx) {
     }
   }
 
-  for (const [getterName, type] of PROTOCOL_GETTERS) {
+  for (const getterName of PROTOCOL_GETTERS) {
     if (typeof ctx.account[getterName] !== 'function') continue
 
-    const writeMethods = PROTOCOL_METHODS[type]
+    const originalGetter = ctx.account[getterName].bind(ctx.account)
 
-    // Accept the `label` arg for parity with the real `account.getXProtocol(label)`.
-    // Simulation is label-agnostic; the arg is reserved for future use if
-    // simulate ever needs to differentiate by protocol label.
-    simulate[getterName] = (_label) => {
+    // Resolve the protocol at call time and mirror the same surface the
+    // enforced proxy governs. Deriving it from a fixed verb list instead would
+    // hide every method outside that list from simulate while the engine still
+    // blocked it — the opposite of what simulate is for.
+    simulate[getterName] = (label) => {
       const out = Object.create(null)
 
-      for (const method of writeMethods) {
+      for (const method of collectGovernedMethods(originalGetter(label), ctx.engine).keys()) {
         out[method] = async (...args) => {
           const context = buildContext({
             operation: method,

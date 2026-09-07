@@ -35,3 +35,4 @@
 /** @typedef {import('./policy-engine.js').RegisterPolicyOptions} RegisterPolicyOptions */
 
 export { default as PolicyViolationError, PolicyConfigurationError } from './policy-error.js'
+export { DEFAULT_POLICY_EXCLUSIONS } from './constants.js'

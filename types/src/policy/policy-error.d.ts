@@ -49,6 +49,48 @@ export class PolicyConfigurationError extends Error {
     constructor(message: string);
 }
 /**
+ * Structured context for a `PolicyAdapterError`.
+ */
+export type PolicyAdapterErrorOptions = {
+    /**
+     * - The wallet identifier the failing call was made against.
+     */
+    walletType?: string;
+    /**
+     * - The method name that was being interpreted.
+     */
+    method?: string;
+    /**
+     * - The underlying error thrown by the extractor, if any.
+     */
+    cause?: unknown;
+};
+/**
+ * Error type produced when an adapter fails to produce a usable
+ * `OperationRecord`: the extractor threw, or it returned a malformed record
+ * (no `kind`). The engine treats this as fail-closed and denies the call.
+ */
+export class PolicyAdapterError extends Error {
+    /**
+     * Constructs the error with a description and optional structured context.
+     *
+     * @param {string} message - Human-readable description of the failure.
+     * @param {PolicyAdapterErrorOptions} [options] - Structured context.
+     */
+    constructor(message: string, options?: PolicyAdapterErrorOptions);
+    /**
+     * The wallet identifier the failing call was made against, when known.
+     * @returns {string | undefined}
+     */
+    get walletType(): string | undefined;
+    /**
+     * The method name that was being interpreted, when known.
+     * @returns {string | undefined}
+     */
+    get method(): string | undefined;
+    #private;
+}
+/**
  * The identifying triple a DENY verdict carries: which policy, which rule,
  * and the human-readable reason.
  */

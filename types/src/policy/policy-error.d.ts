@@ -5,28 +5,28 @@ export default class PolicyViolationError extends Error {
     /**
      * Constructs the error from the identifying set of the policy verdict.
      *
-     * @param {PolicyVerdict} verdict - The verdict identifying which policy, which rule, why, and which denial path.
+     * @param {PolicyVerdict} verdict - The verdict the engine produced for the blocked operation.
      */
     constructor({ policyId, ruleName, reason, code }: PolicyVerdict);
     /**
      * The id of the policy that produced the verdict.
-     * @returns {string}
+     * @returns {string} The policy id, or `<unknown>` on a default-deny verdict that no policy produced.
      */
     get policyId(): string;
     /**
      * The name of the rule within the policy that matched.
-     * @returns {string}
+     * @returns {string} The rule name, or `<unknown>` on a default-deny verdict that no rule produced.
      */
     get ruleName(): string;
     /**
      * Human-readable explanation of why the operation was blocked.
-     * @returns {string}
+     * @returns {string} The rule's own `reason` (or its name) when a rule fired; the engine's reason string otherwise.
      */
     get reason(): string;
     /**
      * Which denial path produced the verdict. Switch on this rather than on
      * `reason`, which carries consumer-authored rule text for `RULE_DENIED`.
-     * @returns {DenialCode}
+     * @returns {DenialCode} The denial path, one of the `DENIAL_CODES` values.
      */
     get code(): DenialCode;
     #private;
@@ -54,8 +54,7 @@ export class PolicyConfigurationError extends Error {
  */
 export type DenialCode = "RULE_DENIED" | "NO_APPLICABLE_RULE" | "GOVERNED_BUT_UNMATCHED";
 /**
- * The identifying set a DENY verdict carries: which policy, which rule, the
- * human-readable reason, and the machine-readable denial code.
+ * The identifying set a DENY verdict carries.
  */
 export type PolicyVerdict = {
     /**

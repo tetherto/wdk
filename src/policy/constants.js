@@ -106,9 +106,7 @@ export const SCOPES = ['project', 'account']
 export const ACTIONS = ['ALLOW', 'DENY']
 
 /**
- * Machine-readable discriminators for why the engine blocked an operation, surfaced as `PolicyViolationError.code`
- * and `SimulationResult.code`. `RULE_DENIED` means a DENY rule actually fired; the two no-match codes are the
- * default-deny paths and are what the explanatory error message keys off.
+ * The runtime values of `DenialCode`, keyed by name.
  */
 export const DENIAL_CODES = {
   RULE_DENIED: 'RULE_DENIED',

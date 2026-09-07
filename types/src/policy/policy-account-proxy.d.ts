@@ -33,9 +33,7 @@
  */
 export function createPolicyEnforcedAccount(account: IWalletAccount, { blockchain, path, index, engine }: WrapContext): Promise<IWalletAccount>;
 /**
- * The per-account state every enforced method closes over. Built once per
- * `createPolicyEnforcedAccount` call and shared by all of that account's
- * wrapped methods.
+ * The per-account state every enforced method closes over.
  */
 export type EnforcementContext = {
     /**

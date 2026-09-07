@@ -27,8 +27,7 @@ import { DENIAL_CODES } from './constants.js'
  */
 
 /**
- * The identifying set a DENY verdict carries: which policy, which rule, the
- * human-readable reason, and the machine-readable denial code.
+ * The identifying set a DENY verdict carries.
  *
  * @typedef {Object} PolicyVerdict
  * @property {string} policyId - The id of the policy that produced the verdict.
@@ -58,7 +57,7 @@ export default class PolicyViolationError extends Error {
   /**
    * Constructs the error from the identifying set of the policy verdict.
    *
-   * @param {PolicyVerdict} verdict - The verdict identifying which policy, which rule, why, and which denial path.
+   * @param {PolicyVerdict} verdict - The verdict the engine produced for the blocked operation.
    */
   constructor ({ policyId, ruleName, reason, code }) {
     super(buildMessage({ policyId, ruleName, reason, code }))
@@ -72,38 +71,33 @@ export default class PolicyViolationError extends Error {
 
   /**
    * The id of the policy that produced the verdict.
-   * @returns {string}
+   * @returns {string} The policy id, or `<unknown>` on a default-deny verdict that no policy produced.
    */
   get policyId () { return this.#policyId }
 
   /**
    * The name of the rule within the policy that matched.
-   * @returns {string}
+   * @returns {string} The rule name, or `<unknown>` on a default-deny verdict that no rule produced.
    */
   get ruleName () { return this.#ruleName }
 
   /**
    * Human-readable explanation of why the operation was blocked.
-   * @returns {string}
+   * @returns {string} The rule's own `reason` (or its name) when a rule fired; the engine's reason string otherwise.
    */
   get reason () { return this.#reason }
 
   /**
    * Which denial path produced the verdict. Switch on this rather than on
    * `reason`, which carries consumer-authored rule text for `RULE_DENIED`.
-   * @returns {DenialCode}
+   * @returns {DenialCode} The denial path, one of the `DENIAL_CODES` values.
    */
   get code () { return this.#code }
 }
 
 /**
- * Builds the error message for a verdict.
- *
- * The two default-deny paths get an explanatory message: a consumer who
- * registered one restrictive rule and then found unrelated operations blocked
- * needs to know the engine denies unmatched operations by design, and how to
- * opt out. A verdict from a rule that actually fired keeps the terse
- * `policy/rule` form — the consumer wrote that rule and knows what it means.
+ * Builds the error message for a verdict. Default-deny verdicts get an explanatory message ending in the
+ * catch-all ALLOW snippet; a verdict from a rule that fired keeps the terse `policy/rule` form.
  *
  * @param {PolicyVerdict} verdict - The verdict to describe.
  * @returns {string} The message to construct the error with.

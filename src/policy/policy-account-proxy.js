@@ -23,9 +23,7 @@ import PolicyViolationError, { PolicyConfigurationError } from './policy-error.j
 /** @typedef {import('./policy-engine.js').WrapContext} WrapContext */
 
 /**
- * The per-account state every enforced method closes over. Built once per
- * `createPolicyEnforcedAccount` call and shared by all of that account's
- * wrapped methods.
+ * The per-account state every enforced method closes over.
  *
  * @typedef {Object} EnforcementContext
  * @property {IWalletAccount} account - The raw account, read for its derivation path when resolving account-scope bindings.
@@ -233,14 +231,14 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
 
 /**
  * Builds the enforced replacement for one wrapped method: evaluate first, then
- * forward to the original only on ALLOW. This is the sole construction site of
- * `PolicyViolationError` — the verdict's denial code rides along so the error
- * can explain the default-deny paths and let consumers switch on them.
+ * forward to the original only on ALLOW.
  *
  * @param {string} name - The operation name being wrapped.
- * @param {Function} boundOriginal - The underlying method, pre-bound to its subject.
+ * @param {(...args: unknown[]) => unknown} boundOriginal - The underlying method, pre-bound to its subject.
  * @param {EnforcementContext} ctx - The per-account state shared by every wrapped method.
- * @returns {Function} The enforced method, which throws {@link PolicyViolationError} on a BLOCK verdict and {@link PolicyConfigurationError} if an argument is not structured-cloneable.
+ * @returns {(...args: unknown[]) => Promise<unknown>} The enforced method, which throws
+ *   {@link PolicyViolationError} on a BLOCK verdict and {@link PolicyConfigurationError} if an argument is not
+ *   structured-cloneable.
  */
 function buildEnforcedMethod (name, boundOriginal, ctx) {
   return async function policyEnforced (...args) {

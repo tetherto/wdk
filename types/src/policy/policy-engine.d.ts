@@ -82,6 +82,7 @@ export default class PolicyEngine {
 }
 export type IWalletAccount = import("@tetherto/wdk-wallet").IWalletAccount;
 export type IWalletAccountReadOnly = import("@tetherto/wdk-wallet").IWalletAccountReadOnly;
+export type DenialCode = import("./policy-error.js").DenialCode;
 /**
  * The verdict a matching rule produces: either permit the operation or block it.
  */
@@ -260,6 +261,10 @@ export type SimulationResult = {
      * - The verdict the engine would produce for this context.
      */
     decision: "ALLOW" | "DENY";
+    /**
+     * - Which denial path produced a DENY, or null on ALLOW. The same value the thrown `PolicyViolationError.code` would carry for this context.
+     */
+    code: DenialCode | null;
     /**
      * - Id of the policy whose rule produced the verdict, or null when no rule addresses the operation (`no-applicable-rule`) or matched (`governed-but-unmatched`).
      */

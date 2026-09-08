@@ -33,6 +33,7 @@
 /** @typedef {import('./src/policy/index.js').SimulationResult} SimulationResult */
 /** @typedef {import('./src/policy/index.js').SimulationTraceEntry} SimulationTraceEntry */
 /** @typedef {import('./src/policy/index.js').RegisterPolicyOptions} RegisterPolicyOptions */
+/** @typedef {import('./src/policy/index.js').DenialCode} DenialCode */
 
 export { default } from './src/wdk.js'
-export { PolicyViolationError, PolicyConfigurationError, DEFAULT_POLICY_EXCLUSIONS } from './src/policy/index.js'
+export { PolicyViolationError, PolicyConfigurationError, DEFAULT_POLICY_EXCLUSIONS, DENIAL_CODES } from './src/policy/index.js'

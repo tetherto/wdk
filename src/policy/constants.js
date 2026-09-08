@@ -104,3 +104,12 @@ export const WILDCARD = '*'
 export const SCOPES = ['project', 'account']
 
 export const ACTIONS = ['ALLOW', 'DENY']
+
+/**
+ * The runtime values of `DenialCode`, keyed by name.
+ */
+export const DENIAL_CODES = {
+  RULE_DENIED: 'RULE_DENIED',
+  NO_APPLICABLE_RULE: 'NO_APPLICABLE_RULE',
+  GOVERNED_BUT_UNMATCHED: 'GOVERNED_BUT_UNMATCHED'
+}

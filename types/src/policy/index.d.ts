@@ -1,4 +1,4 @@
-export { DEFAULT_POLICY_EXCLUSIONS } from "./constants.js";
+export { DEFAULT_POLICY_EXCLUSIONS, DENIAL_CODES } from "./constants.js";
 export type Policy = import("./policy-engine.js").Policy;
 export type PolicyRule = import("./policy-engine.js").PolicyRule;
 export type PolicyCondition = import("./policy-engine.js").PolicyCondition;
@@ -9,4 +9,5 @@ export type PolicyOperation = import("./policy-engine.js").PolicyOperation;
 export type SimulationResult = import("./policy-engine.js").SimulationResult;
 export type SimulationTraceEntry = import("./policy-engine.js").SimulationTraceEntry;
 export type RegisterPolicyOptions = import("./policy-engine.js").RegisterPolicyOptions;
+export type DenialCode = import("./policy-error.js").DenialCode;
 export { default as PolicyViolationError, PolicyConfigurationError } from "./policy-error.js";

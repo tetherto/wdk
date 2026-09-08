@@ -32,6 +32,32 @@
  * @throws {PolicyConfigurationError} If at least one policy applies but the underlying account does not implement `toReadOnlyAccount()`.
  */
 export function createPolicyEnforcedAccount(account: IWalletAccount, { blockchain, path, index, engine }: WrapContext): Promise<IWalletAccount>;
+/**
+ * The per-account state every enforced method closes over.
+ */
+export type EnforcementContext = {
+    /**
+     * - The raw account, read for its derivation path when resolving account-scope bindings.
+     */
+    account: IWalletAccount;
+    /**
+     * - The read-only view handed to condition functions as `context.account`.
+     */
+    readOnlyAccount: IWalletAccountReadOnly;
+    /**
+     * - The wallet identifier (the same string passed to `registerWallet`).
+     */
+    blockchain: string;
+    /**
+     * - The index passed to `wdk.getAccount(wallet, index)`, when the account was retrieved that way.
+     */
+    index: number | undefined;
+    /**
+     * - The engine that evaluates each intercepted call.
+     */
+    engine: PolicyEngine;
+};
 export type IWalletAccount = import("@tetherto/wdk-wallet").IWalletAccount;
+export type IWalletAccountReadOnly = import("@tetherto/wdk-wallet").IWalletAccountReadOnly;
 export type PolicyEngine = import("./policy-engine.js").default;
 export type WrapContext = import("./policy-engine.js").WrapContext;

@@ -1,12 +1,14 @@
 'use strict'
 
+import { runInThisContext } from 'node:vm'
+
 import { beforeEach, describe, expect, jest, test } from '@jest/globals'
 
 import WalletManager from '@tetherto/wdk-wallet'
 
 import { BridgeProtocol, LendingProtocol, SdaProtocol, SwapProtocol, SwidgeProtocol } from '@tetherto/wdk-wallet/protocols'
 
-import WDK, { DEFAULT_POLICY_EXCLUSIONS, PolicyConfigurationError, PolicyViolationError } from '../index.js'
+import WDK, { DEFAULT_POLICY_EXCLUSIONS, DENIAL_CODES, PolicyConfigurationError, PolicyViolationError } from '../index.js'
 
 const SEED_PHRASE = 'cook voyage document eight skate token alien guide drink uncle term abuse'
 
@@ -1002,7 +1004,37 @@ describe('WDK — policy engine', () => {
   // -------------------------------------------------------------------------
 
   describe('PolicyViolationError', () => {
-    test('thrown on DENY carries name, policyId, ruleName, reason, and message', async () => {
+    const NO_APPLICABLE_RULE_MESSAGE = `Policy violation: 'sendTransaction' was denied because no policy rule explicitly allowed it.
+
+No registered rule addresses 'sendTransaction'.
+
+The engine defaults to deny for unmatched operations to prevent restriction bypass via other operations (e.g. sendTransaction calldata, approve, sign, signAuthorization).
+
+To opt into permissive semantics, register a catch-all ALLOW rule and layer specific DENY rules on top:
+
+wdk.registerPolicy({
+  id: 'permissive-baseline',
+  name: 'Permissive baseline',
+  scope: 'project',
+  rules: [{ name: 'allow-all', operation: '*', action: 'ALLOW', conditions: [] }]
+})`
+
+    const GOVERNED_BUT_UNMATCHED_MESSAGE = `Policy violation: 'sendTransaction' was denied because no policy rule explicitly allowed it.
+
+Rules address 'sendTransaction', but none of their conditions matched.
+
+The engine defaults to deny for unmatched operations to prevent restriction bypass via other operations (e.g. sendTransaction calldata, approve, sign, signAuthorization).
+
+To opt into permissive semantics, register a catch-all ALLOW rule and layer specific DENY rules on top:
+
+wdk.registerPolicy({
+  id: 'permissive-baseline',
+  name: 'Permissive baseline',
+  scope: 'project',
+  rules: [{ name: 'allow-all', operation: '*', action: 'ALLOW', conditions: [] }]
+})`
+
+    test('thrown on DENY carries name, policyId, ruleName, reason, code, and message', async () => {
       getAccountMock.mockResolvedValue(buildAccount())
 
       wdk
@@ -1018,9 +1050,11 @@ describe('WDK — policy engine', () => {
       const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
 
       expect(err.name).toBe('PolicyViolationError')
+      expect(err.operation).toBe('sendTransaction')
       expect(err.policyId).toBe('block-eth')
       expect(err.ruleName).toBe('deny-all')
       expect(err.reason).toBe('deny-all')
+      expect(err.code).toBe('RULE_DENIED')
       expect(err.message).toBe('Policy violation: block-eth/deny-all')
       expect(sendTransactionMock).not.toHaveBeenCalled()
     })
@@ -1047,6 +1081,7 @@ describe('WDK — policy engine', () => {
       const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
 
       expect(err.name).toBe('PolicyViolationError')
+      expect(err.operation).toBe('sendTransaction')
       expect(err.policyId).toBe('platform-denylist')
       expect(err.ruleName).toBe('block-bad-recipient')
       expect(err.reason).toBe('recipient is on the sanctioned address list')
@@ -1074,10 +1109,70 @@ describe('WDK — policy engine', () => {
       const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 100n }))
 
       expect(err.name).toBe('PolicyViolationError')
+      expect(err.operation).toBe('sendTransaction')
       expect(err.policyId).toBe('<unknown>')
       expect(err.ruleName).toBe('<unknown>')
       expect(err.reason).toBe('governed-but-unmatched')
-      expect(err.message).toBe('Policy violation: <unknown>/<unknown>: governed-but-unmatched')
+      expect(err.code).toBe('GOVERNED_BUT_UNMATCHED')
+      expect(err.message).toBe(GOVERNED_BUT_UNMATCHED_MESSAGE)
+    })
+
+    test('a denial because no rule addresses the operation explains the default and how to opt out', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'cap-transfer',
+          name: 'Cap transfers',
+          scope: 'project',
+          rules: [{ name: 'cap', operation: 'transfer', action: 'ALLOW', conditions: [] }]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(err.name).toBe('PolicyViolationError')
+      expect(err.operation).toBe('sendTransaction')
+      expect(err.policyId).toBe('<unknown>')
+      expect(err.ruleName).toBe('<unknown>')
+      expect(err.reason).toBe('no-applicable-rule')
+      expect(err.code).toBe('NO_APPLICABLE_RULE')
+      expect(err.message).toBe(NO_APPLICABLE_RULE_MESSAGE)
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('the catch-all snippet in the message registers as-is and lifts the default deny', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'cap-transfer',
+          name: 'Cap transfers',
+          scope: 'project',
+          rules: [{ name: 'cap', operation: 'transfer', action: 'ALLOW', conditions: [] }]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+      const snippet = err.message.slice(err.message.indexOf('wdk.registerPolicy('))
+
+      runInThisContext(`(wdk) => ${snippet}`)(wdk)
+      const result = await account.sendTransaction({ to: RECIPIENT, value: 1n })
+
+      expect(result).toEqual({ hash: DUMMY_TX_HASH })
+      expect(sendTransactionMock).toHaveBeenCalledWith({ to: RECIPIENT, value: 1n })
+    })
+  })
+
+  describe('DENIAL_CODES', () => {
+    test('exposes the three denial codes as their literal values', () => {
+      expect(DENIAL_CODES).toEqual({
+        RULE_DENIED: 'RULE_DENIED',
+        NO_APPLICABLE_RULE: 'NO_APPLICABLE_RULE',
+        GOVERNED_BUT_UNMATCHED: 'GOVERNED_BUT_UNMATCHED'
+      })
     })
   })
 
@@ -1558,6 +1653,7 @@ describe('WDK — policy engine', () => {
       const result = await account.simulate.sendTransaction({ to: RECIPIENT, value: 3n })
 
       expect(result.decision).toBe('ALLOW')
+      expect(result.code).toBeNull()
       expect(result.policy_id).toBe('cap')
       expect(result.matched_rule).toBe('allow-small')
       expect(result.reason).toBe('matched')
@@ -1582,6 +1678,7 @@ describe('WDK — policy engine', () => {
       const result = await account.simulate.sendTransaction({ to: RECIPIENT, value: 1n })
 
       expect(result.decision).toBe('DENY')
+      expect(result.code).toBe('RULE_DENIED')
       expect(result.policy_id).toBe('block-eth')
       expect(result.matched_rule).toBe('deny-all')
       expect(result.reason).toBe('deny-all')
@@ -1606,12 +1703,43 @@ describe('WDK — policy engine', () => {
       const simSend = await account.simulate.sendTransaction({ to: RECIPIENT, value: 1n })
 
       expect(simSign.decision).toBe('DENY')
+      expect(simSign.code).toBe('NO_APPLICABLE_RULE')
       expect(simSign.policy_id).toBeNull()
       expect(simSign.matched_rule).toBeNull()
       expect(simSign.reason).toBe('no-applicable-rule')
       expect(simSend.decision).toBe('ALLOW')
+      expect(simSend.code).toBeNull()
       expect(simSend.policy_id).toBe('only-send')
       expect(signMock).not.toHaveBeenCalled()
+    })
+
+    test('simulate.<method> returns DENY with governed-but-unmatched when rules address the operation but none match', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'sanctions',
+          name: 'sanctions',
+          scope: 'project',
+          rules: [{
+            name: 'deny-sanctioned',
+            operation: 'transfer',
+            action: 'DENY',
+            conditions: [({ args }) => args[0].recipient === SANCTIONED]
+          }]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const result = await account.simulate.transfer({ token: TOKEN, recipient: RECIPIENT, amount: 1n })
+
+      expect(result.decision).toBe('DENY')
+      expect(result.code).toBe('GOVERNED_BUT_UNMATCHED')
+      expect(result.policy_id).toBeNull()
+      expect(result.matched_rule).toBeNull()
+      expect(result.reason).toBe('governed-but-unmatched')
+      expect(result.trace).toEqual([{ scope: 'project', policy_id: 'sanctions', rule_name: 'deny-sanctioned', matched: false }])
+      expect(transferMock).not.toHaveBeenCalled()
     })
   })
 

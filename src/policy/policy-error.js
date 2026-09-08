@@ -30,6 +30,7 @@ import { DENIAL_CODES } from './constants.js'
  * The identifying set a DENY verdict carries.
  *
  * @typedef {Object} PolicyVerdict
+ * @property {string} operation - The name of the method that was blocked.
  * @property {string} policyId - The id of the policy that produced the verdict.
  * @property {string} ruleName - The name of the matching rule.
  * @property {string} reason - Human-readable explanation of why the operation was blocked.
@@ -37,18 +38,22 @@ import { DENIAL_CODES } from './constants.js'
  */
 
 const CATCH_ALL_SNIPPET = `wdk.registerPolicy({
-  rules: [{ operation: '*', action: 'ALLOW', conditions: [] }]
+  id: 'permissive-baseline',
+  name: 'Permissive baseline',
+  scope: 'project',
+  rules: [{ name: 'allow-all', operation: '*', action: 'ALLOW', conditions: [] }]
 })`
 
 const DEFAULT_DENY_DIAGNOSIS = {
-  [DENIAL_CODES.NO_APPLICABLE_RULE]: 'No registered rule addresses this operation.',
-  [DENIAL_CODES.GOVERNED_BUT_UNMATCHED]: 'Rules address this operation, but none of their conditions matched.'
+  [DENIAL_CODES.NO_APPLICABLE_RULE]: (operation) => `No registered rule addresses '${operation}'.`,
+  [DENIAL_CODES.GOVERNED_BUT_UNMATCHED]: (operation) => `Rules address '${operation}', but none of their conditions matched.`
 }
 
 /**
  * Error type produced by the policy engine on a DENY verdict.
  */
 export default class PolicyViolationError extends Error {
+  #operation
   #policyId
   #ruleName
   #reason
@@ -59,15 +64,22 @@ export default class PolicyViolationError extends Error {
    *
    * @param {PolicyVerdict} verdict - The verdict the engine produced for the blocked operation.
    */
-  constructor ({ policyId, ruleName, reason, code }) {
-    super(buildMessage({ policyId, ruleName, reason, code }))
+  constructor ({ operation, policyId, ruleName, reason, code }) {
+    super(buildMessage({ operation, policyId, ruleName, reason, code }))
 
     this.name = 'PolicyViolationError'
+    this.#operation = operation
     this.#policyId = policyId
     this.#ruleName = ruleName
     this.#reason = reason
     this.#code = code
   }
+
+  /**
+   * The name of the method the engine blocked.
+   * @returns {string} The account or protocol method name, as it appears in a rule's `operation`.
+   */
+  get operation () { return this.#operation }
 
   /**
    * The id of the policy that produced the verdict.
@@ -102,18 +114,18 @@ export default class PolicyViolationError extends Error {
  * @param {PolicyVerdict} verdict - The verdict to describe.
  * @returns {string} The message to construct the error with.
  */
-function buildMessage ({ policyId, ruleName, reason, code }) {
-  const diagnosis = DEFAULT_DENY_DIAGNOSIS[code]
+function buildMessage ({ operation, policyId, ruleName, reason, code }) {
+  const diagnose = DEFAULT_DENY_DIAGNOSIS[code]
 
-  if (diagnosis === undefined) {
+  if (diagnose === undefined) {
     const suffix = reason && reason !== ruleName ? `: ${reason}` : ''
 
     return `Policy violation: ${policyId}/${ruleName}${suffix}`
   }
 
   return [
-    'Policy violation: this operation was denied because no policy rule explicitly allowed it.',
-    diagnosis,
+    `Policy violation: '${operation}' was denied because no policy rule explicitly allowed it.`,
+    diagnose(operation),
     'The engine defaults to deny for unmatched operations to prevent restriction bypass via other operations (e.g. sendTransaction calldata, approve, sign, signAuthorization).',
     'To opt into permissive semantics, register a catch-all ALLOW rule and layer specific DENY rules on top:',
     CATCH_ALL_SNIPPET

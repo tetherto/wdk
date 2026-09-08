@@ -185,6 +185,7 @@ If you want permissive semantics on a specific account (allow anything that isn'
 ```javascript
 wdk.registerPolicy({
   id: 'permissive-baseline',
+  name: 'Permissive baseline',
   scope: 'project',
   rules: [
     { name: 'allow-all', operation: '*', action: 'ALLOW', conditions: [] },
@@ -197,7 +198,7 @@ Accounts that have **no** registered policies are not governed — the proxy is 
 
 #### Telling the denial paths apart
 
-`PolicyViolationError` carries a machine-readable `code` alongside the human-readable `reason`. Branch on `code` — `reason` holds your own rule text when a rule fires, so it isn't a stable discriminator:
+`PolicyViolationError` carries a machine-readable `code` alongside the human-readable `reason`, and `operation` names the blocked method. Branch on `code` — `reason` holds your own rule text when a rule fires, so it isn't a stable discriminator:
 
 | `code` | What happened |
 | --- | --- |

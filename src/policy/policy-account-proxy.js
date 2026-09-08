@@ -255,6 +255,7 @@ function buildEnforcedMethod (name, boundOriginal, ctx) {
 
     if (verdict.outcome === 'BLOCK') {
       throw new PolicyViolationError({
+        operation: name,
         policyId: verdict.policyId ?? '<unknown>',
         ruleName: verdict.ruleName ?? '<unknown>',
         reason: verdict.reason ?? 'unknown',

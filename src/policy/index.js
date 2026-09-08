@@ -17,10 +17,11 @@
 /**
  * Public surface of the policy engine sub-module.
  *
- * Re-exports the runtime classes (errors) and the public typedefs that
- * consumers need to type their policies, conditions, and simulation results.
- * Internal modules (registry, evaluator, validators, wrapper, context,
- * constants) are not re-exported here — they're implementation details.
+ * Re-exports the error classes, the public constants (`DEFAULT_POLICY_EXCLUSIONS`,
+ * `DENIAL_CODES`), and the typedefs consumers need to type their policies,
+ * conditions, and simulation results. The registry, evaluator, validators,
+ * wrapper, and context modules are not re-exported here — they're
+ * implementation details.
  */
 
 /** @typedef {import('./policy-engine.js').Policy} Policy */

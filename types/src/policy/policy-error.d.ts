@@ -7,7 +7,12 @@ export default class PolicyViolationError extends Error {
      *
      * @param {PolicyVerdict} verdict - The verdict the engine produced for the blocked operation.
      */
-    constructor({ policyId, ruleName, reason, code }: PolicyVerdict);
+    constructor({ operation, policyId, ruleName, reason, code }: PolicyVerdict);
+    /**
+     * The name of the method the engine blocked.
+     * @returns {string} The account or protocol method name, as it appears in a rule's `operation`.
+     */
+    get operation(): string;
     /**
      * The id of the policy that produced the verdict.
      * @returns {string} The policy id, or `<unknown>` on a default-deny verdict that no policy produced.
@@ -57,6 +62,10 @@ export type DenialCode = "RULE_DENIED" | "NO_APPLICABLE_RULE" | "GOVERNED_BUT_UN
  * The identifying set a DENY verdict carries.
  */
 export type PolicyVerdict = {
+    /**
+     * - The name of the method that was blocked.
+     */
+    operation: string;
     /**
      * - The id of the policy that produced the verdict.
      */

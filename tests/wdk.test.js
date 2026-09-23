@@ -670,6 +670,51 @@ describe('WDK', () => {
     })
   })
 
+  describe('registerProtocol', () => {
+    class Unrelated {}
+
+    test('should register a class extending one of the six base protocols', () => {
+      class MySwap extends SwapProtocol {}
+
+      expect(wdk.registerProtocol('ethereum', 'mine', MySwap, {})).toBe(wdk)
+    })
+
+    test('should throw if the class extends none of the six base protocols', () => {
+      expect(() => wdk.registerProtocol('ethereum', 'mine', Unrelated, {}))
+        .toThrow(TypeError)
+
+      expect(() => wdk.registerProtocol('ethereum', 'mine', Unrelated, {}))
+        .toThrow(/Unrelated must extend one of/)
+    })
+
+    test('should name the duplicated package as the likely cause', () => {
+      // A second copy of @tetherto/wdk-wallet in the tree produces a base class
+      // that is a different object, so `instanceof` fails on a class that does
+      // extend SwapProtocol. Reproduced here by extending a distinct class.
+      class SwapProtocolFromAnotherCopy {}
+      class MySwap extends SwapProtocolFromAnotherCopy {}
+
+      expect(() => wdk.registerProtocol('ethereum', 'mine', MySwap, {}))
+        .toThrow(/resolves to more than one copy in the dependency tree/)
+    })
+
+    test('should throw a descriptive TypeError when Protocol is undefined', () => {
+      expect(() => wdk.registerProtocol('ethereum', 'mine', undefined, {}))
+        .toThrow(/undefined must extend one of/)
+    })
+
+    test('should apply the same check to account.registerProtocol', async () => {
+      getAccountMock.mockResolvedValue(DUMMY_ACCOUNT)
+
+      wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+
+      const account = await wdk.getAccount('ethereum', 0)
+
+      expect(() => account.registerProtocol('mine', Unrelated, {}))
+        .toThrow(/Unrelated must extend one of/)
+    })
+  })
+
   describe('getFeeRates', () => {
     test('should return the correct fee rates for the given blockchain', async () => {
       const DUMMY_FEE_RATES = { normal: 100n, fast: 200n }

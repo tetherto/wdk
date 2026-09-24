@@ -67,7 +67,7 @@ export default class WDK {
   /**
    * Creates a new WDK.
    *
-   * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase.
+   * @param {string | Uint8Array} seed - A BIP-39 mnemonic seed phrase, or a raw BIP-32 master seed (16-64 bytes).
    * @param {WdkOptions} [options] - Instance-level settings such as `maxConditionTimeoutMs` and `policyExclusions`.
    * @throws {Error} If the seed is not valid.
    * @throws {PolicyConfigurationError} If `options` is not a plain object.

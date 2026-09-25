@@ -51,6 +51,14 @@ function isProtectedMember (prop) {
   return prop === 'keyPair' || (typeof prop === 'string' && prop.startsWith('_'))
 }
 
+function isInheritedObjectMethod (target, prop) {
+  for (let owner = target; owner !== null; owner = Object.getPrototypeOf(owner)) {
+    if (Object.prototype.hasOwnProperty.call(owner, prop)) return owner === Object.prototype
+  }
+
+  return false
+}
+
 /**
  * Wraps `subject` in a Proxy that serves `substitutions` in place of the
  * subject's own members and treats protected members as absent.
@@ -92,7 +100,9 @@ function createGuardedProxy (subject, substitutions) {
       // Bind functions to the underlying target so internal `this.method()`
       // calls resolve on the original account, bypassing the proxy. This is
       // how nested-call escape works without any async-context tracking.
-      if (typeof value === 'function') return value.bind(target)
+      // Leave inherited Object methods unbound so they keep the proxy as
+      // `this` and cannot be used to recover the underlying target.
+      if (typeof value === 'function' && !isInheritedObjectMethod(target, prop)) return value.bind(target)
 
       return value
     },

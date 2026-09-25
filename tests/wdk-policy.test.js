@@ -792,6 +792,51 @@ describe('WDK — policy engine', () => {
       expect(account.keyPair).toBeUndefined()
     })
 
+    test('valueOf does not unwrap governed account or protocol proxies', async () => {
+      const swapInstanceMock = jest.fn().mockResolvedValue(DUMMY_SWAP_RESULT)
+
+      class MySwapProtocol extends SwapProtocol {
+        constructor (account) { super(); this._account = account }
+        async swap (opts) { return swapInstanceMock(opts) }
+      }
+
+      getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, {
+        keyPair: { privateKey: new Uint8Array([1, 2, 3]) }
+      }))
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerProtocol('ethereum', 'velora', MySwapProtocol, {})
+        .registerPolicy({
+          id: 'deny-writes',
+          name: 'deny-writes',
+          scope: 'project',
+          rules: [
+            { name: 'deny-send', operation: 'sendTransaction', action: 'DENY', conditions: [] },
+            { name: 'deny-swap', operation: 'swap', action: 'DENY', conditions: [] }
+          ]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const accountValue = account.valueOf()
+
+      expect(accountValue).toBe(account)
+      expect(accountValue.keyPair).toBeUndefined()
+
+      const accountError = await catchAsync(() => accountValue.sendTransaction({ to: RECIPIENT, value: 1n }))
+      expect(accountError.name).toBe('PolicyViolationError')
+
+      const swap = account.getSwapProtocol('velora')
+      const swapValue = swap.valueOf()
+
+      expect(swapValue).toBe(swap)
+      expect(swapValue._account).toBeUndefined()
+
+      const swapError = await catchAsync(() => swapValue.swap({ tokenIn: 'A', tokenOut: 'B', tokenInAmount: 1n }))
+      expect(swapError.name).toBe('PolicyViolationError')
+      expect(swapInstanceMock).not.toHaveBeenCalled()
+    })
+
     test('internal references (_signer, _provider, _config) are not reachable through a governed account', async () => {
       getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, {
         _signer: { signTransaction: jest.fn() },

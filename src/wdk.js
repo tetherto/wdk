@@ -20,6 +20,39 @@ import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol, SwidgeProt
 
 import PolicyEngine from './policy/policy-engine.js'
 
+/**
+ * The six protocol base classes, in the order `registerProtocol` tested them.
+ * They form no hierarchy among themselves, so the order carries no meaning.
+ */
+const PROTOCOL_BASES = [
+  ['swidge', SwidgeProtocol],
+  ['sda', SdaProtocol],
+  ['swap', SwapProtocol],
+  ['bridge', BridgeProtocol],
+  ['lending', LendingProtocol],
+  ['fiat', FiatProtocol]
+]
+
+/**
+ * Resolves the bucket a protocol class belongs to.
+ *
+ * @param {Function} Protocol - The protocol class.
+ * @returns {string} The bucket name.
+ * @throws {TypeError} If the class extends none of the six base protocols.
+ */
+function protocolBucket (Protocol) {
+  for (const [bucket, Base] of PROTOCOL_BASES) {
+    if (Protocol?.prototype instanceof Base) return bucket
+  }
+
+  throw new TypeError(
+    `${typeof Protocol === 'function' ? Protocol.name || 'The protocol class' : String(Protocol)} ` +
+    'must extend one of SwidgeProtocol, SdaProtocol, SwapProtocol, BridgeProtocol, LendingProtocol ' +
+    'or FiatProtocol. If it does, @tetherto/wdk-wallet resolves to more than one copy in the ' +
+    'dependency tree, and the base class it extends is not the one this package compares against.'
+  )
+}
+
 /** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
 
 /** @typedef {import('@tetherto/wdk-wallet').FeeRates} FeeRates */
@@ -157,33 +190,14 @@ export default class WDK {
    * @param {P} Protocol - The protocol class.
    * @param {ConstructorParameters<P>[1]} config - The protocol configuration.
    * @returns {WDK} The WDK.
+   * @throws {TypeError} If `Protocol` extends none of the six base protocol classes.
    */
   registerProtocol (blockchain, label, Protocol, config) {
-    if (Protocol.prototype instanceof SwidgeProtocol) {
-      this._protocols.swidge[blockchain] ??= Object.create(null)
+    const bucket = protocolBucket(Protocol)
 
-      this._protocols.swidge[blockchain][label] = { Protocol, config }
-    } else if (Protocol.prototype instanceof SdaProtocol) {
-      this._protocols.sda[blockchain] ??= Object.create(null)
+    this._protocols[bucket][blockchain] ??= Object.create(null)
 
-      this._protocols.sda[blockchain][label] = { Protocol, config }
-    } else if (Protocol.prototype instanceof SwapProtocol) {
-      this._protocols.swap[blockchain] ??= Object.create(null)
-
-      this._protocols.swap[blockchain][label] = { Protocol, config }
-    } else if (Protocol.prototype instanceof BridgeProtocol) {
-      this._protocols.bridge[blockchain] ??= Object.create(null)
-
-      this._protocols.bridge[blockchain][label] = { Protocol, config }
-    } else if (Protocol.prototype instanceof LendingProtocol) {
-      this._protocols.lending[blockchain] ??= Object.create(null)
-
-      this._protocols.lending[blockchain][label] = { Protocol, config }
-    } else if (Protocol.prototype instanceof FiatProtocol) {
-      this._protocols.fiat[blockchain] ??= Object.create(null)
-
-      this._protocols.fiat[blockchain][label] = { Protocol, config }
-    }
+    this._protocols[bucket][blockchain][label] = { Protocol, config }
 
     return this
   }
@@ -357,19 +371,7 @@ export default class WDK {
     this._decoratedAccounts.add(account)
 
     account.registerProtocol = (label, Protocol, config) => {
-      if (Protocol.prototype instanceof SwidgeProtocol) {
-        protocols.swidge[label] = new Protocol(account, config)
-      } else if (Protocol.prototype instanceof SdaProtocol) {
-        protocols.sda[label] = new Protocol(account, config)
-      } else if (Protocol.prototype instanceof SwapProtocol) {
-        protocols.swap[label] = new Protocol(account, config)
-      } else if (Protocol.prototype instanceof BridgeProtocol) {
-        protocols.bridge[label] = new Protocol(account, config)
-      } else if (Protocol.prototype instanceof LendingProtocol) {
-        protocols.lending[label] = new Protocol(account, config)
-      } else if (Protocol.prototype instanceof FiatProtocol) {
-        protocols.fiat[label] = new Protocol(account, config)
-      }
+      protocols[protocolBucket(Protocol)][label] = new Protocol(account, config)
 
       return account
     }

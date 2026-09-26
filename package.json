@@ -20,7 +20,9 @@
     "lint": "standard",
     "lint:fix": "standard --fix",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage"
+    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "build:example:browser": "node examples/browser/build.js",
+    "test:browser": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --config jest.browser.config.js"
   },
   "dependencies": {
     "@tetherto/wdk-wallet": "^1.0.0-beta.15",
@@ -28,8 +30,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "buffer": "6.0.3",
     "cross-env": "7.0.3",
     "jest": "30.4.2",
+    "playwright": "1.63.0",
     "standard": "17.1.2",
     "typescript": "5.8.3"
   },
@@ -50,7 +54,8 @@
   "standard": {
     "ignore": [
       "bare.js",
-      "tests/**/*.js"
+      "tests/**/*.js",
+      "examples/browser/dist/**"
     ]
   }
 }

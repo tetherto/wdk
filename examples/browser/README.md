@@ -38,7 +38,8 @@ here as they do on Node.
 Two things come from `bip39@3.1.0`, which `@tetherto/wdk-wallet` depends on:
 
 - **It is published as CommonJS.** No browser can load it natively, so bundling the
-  example is required rather than a matter of taste. `build.js` uses esbuild; any
+  example is required rather than a matter of taste. `build.js` drives esbuild's CLI
+  through npx, so the bundler stays out of this package's dependency tree; any
   bundler will do.
 - **It reads the global `Buffer`.** Browsers do not define it. `buffer-shim.js`
   supplies the binding, injected by the bundler wherever the name appears.

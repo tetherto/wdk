@@ -96,6 +96,7 @@ function addresses (policies, operation) {
 
 async function evalGroup (policies, context, trace, scope, { allowOverride }) {
   const allows = []
+  let override = null
 
   for (const policy of policies) {
     const conditionTimeoutMs = policy._conditionTimeoutMs
@@ -124,13 +125,18 @@ async function evalGroup (policies, context, trace, scope, { allowOverride }) {
         return { kind: 'DENY', policyId: policy.id, ruleName: rule.name, reason }
       }
 
+      // An override only skips the broader scope. A DENY later in this group must
+      // still win, so remember the first matching override and keep scanning.
       if (allowOverride && rule.override_broader_scope === true) {
-        return { kind: 'ALLOW_FINAL', policyId: policy.id, ruleName: rule.name }
+        if (override === null) override = { policyId: policy.id, ruleName: rule.name }
+        continue
       }
 
       allows.push({ policyId: policy.id, ruleName: rule.name })
     }
   }
+
+  if (override !== null) return { kind: 'ALLOW_FINAL', ...override }
 
   return { kind: 'CONTINUE', allows }
 }

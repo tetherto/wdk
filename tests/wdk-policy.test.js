@@ -778,6 +778,37 @@ describe('WDK — policy engine', () => {
   // -------------------------------------------------------------------------
 
   describe('internal-reference containment', () => {
+    test('a registered protocol receives the governed account, so its internal account writes are policy-gated', async () => {
+      class MySwapProtocol extends SwapProtocol {
+        constructor (account) { super(); this._account = account }
+        async swap () { return this._account.sendTransaction({ to: RECIPIENT, value: 1n }) }
+      }
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerProtocol('ethereum', 'velora', MySwapProtocol, {})
+        .registerPolicy({
+          id: 'allow-swap-deny-send',
+          name: 'allow-swap-deny-send',
+          scope: 'project',
+          rules: [
+            { name: 'allow-swap', operation: 'swap', action: 'ALLOW', conditions: [] },
+            { name: 'deny-send', operation: 'sendTransaction', action: 'DENY', conditions: [] }
+          ]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const swap = account.getSwapProtocol('velora')
+
+      const denied = await catchAsync(() => swap.swap())
+
+      expect(denied.name).toBe('PolicyViolationError')
+      expect(denied.ruleName).toBe('deny-send')
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
     test('key material (keyPair) is not reachable through a governed account', async () => {
       getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, {
         keyPair: { privateKey: new Uint8Array([1, 2, 3]) }
@@ -2138,7 +2169,7 @@ wdk.registerPolicy({
       expect(swapInstanceMock).not.toHaveBeenCalled()
     })
 
-    test('a protocol method (bridge) that internally calls account.sendTransaction triggers nested-call escape', async () => {
+    test('a protocol method (bridge) that internally calls account.sendTransaction has the nested call policy-evaluated', async () => {
       const condition = jest.fn().mockReturnValue(true)
 
       class MyBridgeProtocol extends BridgeProtocol {
@@ -2169,9 +2200,13 @@ wdk.registerPolicy({
       const result = await bridge.bridge()
 
       expect(result.hash).toBe(DUMMY_TX_HASH)
-      expect(condition).toHaveBeenCalledTimes(1)
+      expect(condition).toHaveBeenCalledTimes(2)
       expect(condition).toHaveBeenCalledWith(expect.objectContaining({
         operation: 'bridge',
+        wallet: 'ethereum'
+      }))
+      expect(condition).toHaveBeenCalledWith(expect.objectContaining({
+        operation: 'sendTransaction',
         wallet: 'ethereum'
       }))
       expect(sendTransactionMock).toHaveBeenCalledTimes(1)

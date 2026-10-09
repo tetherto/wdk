@@ -53,6 +53,7 @@ export class IWalletAccountWithProtocols extends IWalletAccount {
    * @param {P} Protocol - The protocol class.
    * @param {ConstructorParameters<P>[1]} config - The protocol configuration.
    * @returns {IWalletAccountWithProtocols} The account.
+   * @throws {TypeError} If `Protocol` extends none of the six base protocol classes.
    */
   registerProtocol (label, Protocol, config) {
     throw new NotImplementedError('registerProtocol(label, Protocol, config)')

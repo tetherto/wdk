@@ -21,6 +21,7 @@ export class IWalletAccountWithProtocols {
      * @param {P} Protocol - The protocol class.
      * @param {ConstructorParameters<P>[1]} config - The protocol configuration.
      * @returns {IWalletAccountWithProtocols} The account.
+     * @throws {TypeError} If `Protocol` extends none of the six base protocol classes.
      */
     registerProtocol<P extends typeof SwapProtocol | typeof BridgeProtocol | typeof LendingProtocol | typeof FiatProtocol | typeof SwidgeProtocol | typeof SdaProtocol>(label: string, Protocol: P, config: ConstructorParameters<P>[1]): IWalletAccountWithProtocols;
     /**

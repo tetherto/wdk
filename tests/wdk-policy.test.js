@@ -2888,6 +2888,51 @@ wdk.registerPolicy({
       expect(err2.policyId).toBe('path-bound')
     })
 
+    test('a derivation suffix does not match an account whose real path is the full BIP-44 path', async () => {
+      const fullPath = "m/44'/60'/0'/0/0"
+
+      getAccountMock.mockResolvedValue(buildAccount(fullPath))
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'suffix',
+          name: 'suffix',
+          scope: 'account',
+          wallet: 'ethereum',
+          accounts: ["0'/0/0"],
+          rules: [{ name: 'deny', operation: 'sendTransaction', action: 'DENY', conditions: [] }]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const result = await account.sendTransaction({ to: RECIPIENT, value: 1n })
+
+      expect(account.path).toBe(fullPath)
+      expect(result.hash).toBe(DUMMY_TX_HASH)
+    })
+
+    test('the full account.path matches, governing the account', async () => {
+      const fullPath = "m/44'/60'/0'/0/0"
+
+      getAccountMock.mockResolvedValue(buildAccount(fullPath))
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerPolicy({
+          id: 'full-path',
+          name: 'full-path',
+          scope: 'account',
+          wallet: 'ethereum',
+          accounts: [fullPath],
+          rules: [{ name: 'deny', operation: 'sendTransaction', action: 'DENY', conditions: [] }]
+        })
+
+      const account = await wdk.getAccount('ethereum', 0)
+      const err = await catchAsync(() => account.sendTransaction({ to: RECIPIENT, value: 1n }))
+
+      expect(err.policyId).toBe('full-path')
+    })
+
     test('rejects accounts entries that are neither non-empty strings nor non-negative integers', () => {
       wdk.registerWallet('ethereum', WalletManagerMock, {})
 

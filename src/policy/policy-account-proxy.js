@@ -92,7 +92,12 @@ function createGuardedProxy (subject, substitutions) {
       // Bind functions to the underlying target so internal `this.method()`
       // calls resolve on the original account, bypassing the proxy. This is
       // how nested-call escape works without any async-context tracking.
-      if (typeof value === 'function') return value.bind(target)
+      //
+      // Inherited `Object.prototype` methods are left unbound so they keep the
+      // proxy as `this`; binding `valueOf` to the target would unwrap the proxy.
+      if (typeof value === 'function' && value !== Object.prototype[prop]) {
+        return value.bind(target)
+      }
 
       return value
     },

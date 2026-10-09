@@ -792,6 +792,27 @@ describe('WDK — policy engine', () => {
       expect(account.keyPair).toBeUndefined()
     })
 
+    test('valueOf returns the proxy, not the unwrapped account or protocol', async () => {
+      class MySwapProtocol extends SwapProtocol {
+        async swap (opts) { return DUMMY_SWAP_RESULT }
+      }
+
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      wdk
+        .registerWallet('ethereum', WalletManagerMock, {})
+        .registerProtocol('ethereum', 'velora', MySwapProtocol, {})
+        .registerPolicy(projectAllowAll('p'))
+
+      const account = await wdk.getAccount('ethereum', 0)
+
+      expect(account.valueOf()).toBe(account)
+
+      const swap = account.getSwapProtocol('velora')
+
+      expect(swap.valueOf()).toBe(swap)
+    })
+
     test('internal references (_signer, _provider, _config) are not reachable through a governed account', async () => {
       getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, {
         _signer: { signTransaction: jest.fn() },

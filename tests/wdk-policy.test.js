@@ -1552,6 +1552,51 @@ wdk.registerPolicy({
       expect(result.hash).toBe(DUMMY_TX_HASH)
     })
 
+    const registerPathFreeze = () => wdk
+      .registerWallet('ethereum', WalletManagerMock, {})
+      .registerPolicy({
+        id: 'baseline',
+        name: 'baseline',
+        scope: 'project',
+        rules: [{ name: 'allow-all', operation: '*', action: 'ALLOW', conditions: [] }]
+      })
+      .registerPolicy({
+        id: 'freeze-path',
+        name: 'freeze-path',
+        scope: 'account',
+        wallet: 'ethereum',
+        accounts: [PATH_DEFAULT],
+        rules: [{ name: 'path-frozen', operation: 'sendTransaction', action: 'DENY', conditions: [] }]
+      })
+
+    test.each([
+      ['Object.defineProperty on path', (account) => Object.defineProperty(account, 'path', { value: PATH_SECONDARY })],
+      ['assigning path', (account) => { account.path = PATH_SECONDARY }],
+      ['assigning _path', (account) => { account._path = PATH_SECONDARY }]
+    ])('a path-bound account DENY still holds after %s on the wrapped account', async (_label, spoof) => {
+      getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT))
+      registerPathFreeze()
+
+      const account = await wdk.getAccount('ethereum', 0)
+
+      expect(() => spoof(account)).toThrow(TypeError)
+      expect(account.path).toBe(PATH_DEFAULT)
+      await expect(account.sendTransaction({ to: RECIPIENT, value: 50n }))
+        .rejects.toMatchObject({ name: 'PolicyViolationError', policyId: 'freeze-path', ruleName: 'path-frozen' })
+    })
+
+    test('a path-bound account DENY is evaluated against the path captured at wrap time', async () => {
+      const raw = buildAccount(PATH_DEFAULT)
+      getAccountMock.mockResolvedValue(raw)
+      registerPathFreeze()
+
+      const account = await wdk.getAccount('ethereum', 0)
+      raw.path = PATH_SECONDARY
+
+      await expect(account.sendTransaction({ to: RECIPIENT, value: 50n }))
+        .rejects.toMatchObject({ name: 'PolicyViolationError', policyId: 'freeze-path', ruleName: 'path-frozen' })
+    })
+
     test('the override only engages when the account-scope rule actually matches; otherwise broader DENY fires', async () => {
       getAccountMock.mockResolvedValue(buildAccount())
 

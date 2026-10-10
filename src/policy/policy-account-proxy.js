@@ -26,7 +26,9 @@ import PolicyViolationError, { PolicyConfigurationError } from './policy-error.j
  * The per-account state every enforced method closes over.
  *
  * @typedef {Object} EnforcementContext
- * @property {IWalletAccount} account - The raw account, read for its derivation path when resolving account-scope bindings.
+ * @property {IWalletAccount} account - The raw account.
+ * @property {string} path - The derivation path captured when the account was wrapped. Account-scope bindings are
+ *   resolved against it, never against a path read again from the account.
  * @property {IWalletAccountReadOnly} readOnlyAccount - The read-only view handed to condition functions as `context.account`.
  * @property {string} blockchain - The wallet identifier (the same string passed to `registerWallet`).
  * @property {number | undefined} index - The index passed to `wdk.getAccount(wallet, index)`, when the account
@@ -44,6 +46,10 @@ const PROTOCOL_GETTERS = [
 ]
 
 const EMPTY_METHODS = new Map()
+
+// Path fields a guarded proxy refuses to change: `path` on EVM accounts,
+// `_path` behind the `path` getter on BTC, Solana, TON and Tron accounts.
+const LOCKED_MEMBERS = new Set(['path', '_path'])
 
 const governedMethodCache = new WeakMap()
 
@@ -129,6 +135,21 @@ function createGuardedProxy (subject, substitutions) {
       return Reflect.ownKeys(target).filter((prop) => !isProtectedMember(prop))
     },
 
+    // The derivation path selected this account's policy bindings when it was
+    // wrapped. Refuse writes that would change or shadow it, so the account and
+    // a later getAccount() keep seeing the path the engine evaluates.
+    set (target, prop, value) {
+      if (LOCKED_MEMBERS.has(prop)) return false
+
+      return Reflect.set(target, prop, value, target)
+    },
+
+    defineProperty (target, prop, descriptor) {
+      if (LOCKED_MEMBERS.has(prop)) return false
+
+      return Reflect.defineProperty(target, prop, descriptor)
+    },
+
     preventExtensions () {
       return false
     }
@@ -179,7 +200,7 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
 
   const readOnlyAccount = await account.toReadOnlyAccount()
 
-  const ctx = { account, readOnlyAccount, blockchain, index, engine }
+  const ctx = { account, readOnlyAccount, blockchain, path, index, engine }
 
   const substitutions = new Map()
 
@@ -256,7 +277,7 @@ function buildEnforcedMethod (name, boundOriginal, ctx) {
       args: forwardedArgs
     })
 
-    const verdict = await ctx.engine._evaluateContext(context, { path: ctx.account.path, index: ctx.index })
+    const verdict = await ctx.engine._evaluateContext(context, { path: ctx.path, index: ctx.index })
 
     if (verdict.outcome === 'BLOCK') {
       throw new PolicyViolationError({
@@ -375,7 +396,7 @@ function buildSimulateMirror (methodNames, ctx) {
         args
       })
 
-      return ctx.engine._simulateContext(context, { path: ctx.account.path, index: ctx.index })
+      return ctx.engine._simulateContext(context, { path: ctx.path, index: ctx.index })
     }
   }
 
@@ -400,7 +421,7 @@ function buildSimulateMirror (methodNames, ctx) {
             args
           })
 
-          return ctx.engine._simulateContext(context, { path: ctx.account.path, index: ctx.index })
+          return ctx.engine._simulateContext(context, { path: ctx.path, index: ctx.index })
         }
       }
 

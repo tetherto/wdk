@@ -37,9 +37,14 @@ export function createPolicyEnforcedAccount(account: IWalletAccount, { blockchai
  */
 export type EnforcementContext = {
     /**
-     * - The raw account, read for its derivation path when resolving account-scope bindings.
+     * - The raw account.
      */
     account: IWalletAccount;
+    /**
+     * - The derivation path captured when the account was wrapped. Account-scope bindings are
+     * resolved against it, never against a path read again from the account.
+     */
+    path: string;
     /**
      * - The read-only view handed to condition functions as `context.account`.
      */

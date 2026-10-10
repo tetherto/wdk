@@ -77,7 +77,7 @@ import {
  * @property {string} [reason] - Optional human-readable explanation. When set on a DENY rule that matches, propagates to PolicyViolationError.reason and to the matching simulate-result. Defaults to the rule's name.
  * @property {PolicyOperation | PolicyOperation[]} operation - The wrapped operation(s) this rule addresses. May be a single operation name, an array, or the wildcard `*`.
  * @property {PolicyAction} action - Whether a matching rule allows or denies the operation.
- * @property {boolean} [override_broader_scope] - When true on an account-scope ALLOW rule that matches, the rule's verdict short-circuits project-scope evaluation. Account-scope rules are evaluated in registration order; the first matching override-flag rule wins. Only valid on account-scope ALLOW rules.
+ * @property {boolean} [override_broader_scope] - When true on an account-scope ALLOW rule that matches, project-scope evaluation is skipped for that call. A matching account-scope DENY still wins, whatever the registration order. When several override-flag rules match, the first one in registration order is reported. Only valid on account-scope ALLOW rules.
  * @property {PolicyCondition[]} conditions - Functions evaluated in order; all must return truthy for the rule to match. Each is raced against the `conditionTimeoutMs` its own policy was registered with.
  * @property {Record<string, unknown>} [state] - Reserved for future use; currently ignored at runtime.
  * @property {(c: PolicyContext) => void | Promise<void>} [onSuccess] - Reserved for future use; currently ignored at runtime.

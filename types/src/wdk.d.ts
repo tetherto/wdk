@@ -17,13 +17,9 @@ export default class WDK {
      * Creates a new WDK.
      *
      * @param {string | Uint8Array} seed - A BIP-39 mnemonic seed phrase, or a raw BIP-32 master seed (16-64 bytes).
-     * @param {WdkOptions} [options] - Instance-level settings such as `maxConditionTimeoutMs` and `policyExclusions`.
      * @throws {Error} If the seed is not valid.
-     * @throws {PolicyConfigurationError} If `options` is not a plain object.
-     * @throws {PolicyConfigurationError} If `maxConditionTimeoutMs` is not a finite positive number.
-     * @throws {PolicyConfigurationError} If `policyExclusions` is not an array of non-empty strings.
      */
-    constructor(seed: string | Uint8Array, options?: WdkOptions);
+    constructor(seed: string | Uint8Array);
     /** @private */
     private _seed;
     /** @private */
@@ -33,9 +29,9 @@ export default class WDK {
     /** @private */
     private _middlewares;
     /** @private */
-    private _policyEngine;
-    /** @private */
     private _decoratedAccounts;
+    /** @private */
+    private _accountPaths;
     /**
      * Registers a new wallet to the WDK.
      *
@@ -65,7 +61,9 @@ export default class WDK {
     /**
      * Registers a new middleware to the WDK.
      *
-     * It's possible to register multiple middlewares for the same blockchain, which will be called sequentially.
+     * It's possible to register multiple middlewares for the same blockchain, which will be called sequentially, after the
+     * account's protocol getters are attached. A middleware may return a replacement account: the next middleware, and
+     * finally the caller of `getAccount` or `getAccountByPath`, receive the replacement instead of the original.
      *
      * @param {string} blockchain - The name of the blockchain the middleware must be bound to. Can be any string (e.g., "ethereum").
      * @param {MiddlewareFunction} middleware - A callback function that is called each time the user derives a new account.
@@ -73,44 +71,12 @@ export default class WDK {
      */
     registerMiddleware(blockchain: string, middleware: MiddlewareFunction): WDK;
     /**
-     * Returns the resolved set of method names the policy proxy hands through
-     * without consulting the engine — `DEFAULT_POLICY_EXCLUSIONS` unioned with
-     * any `policyExclusions` passed to the constructor.
-     *
-     * Every other callable on a governed account is evaluated, so this list is
-     * the complete inventory of what policies cannot gate on this instance.
-     *
-     * @returns {readonly string[]} The frozen resolved exclusion set. Mutating the return value does not affect the engine.
-     */
-    getPolicyExclusions(): readonly string[];
-    /**
-     * Registers one or more transaction policies that will be evaluated before
-     * any wrapped account or protocol method is allowed to execute.
-     *
-     * Each policy's `wallet` field (optional for `scope: 'project'`, required
-     * for `scope: 'account'`) declares which wallet identifier(s) it binds to.
-     * A wallet identifier is the same string passed to `registerWallet` — it
-     * might be a chain name like `"ethereum"`, but it could equally be
-     * `"treasury-cold"` or any label the consumer chose. Omitting `wallet` on
-     * a project-scope policy applies it across every registered wallet.
-     *
-     * Multiple `registerPolicy` calls stack. If a policy with the same id is
-     * registered twice into the same binding, the second call replaces the first.
-     *
-     * @param {Policy | Policy[]} policies - A single policy or array of policies to register on this WDK instance.
-     * @param {RegisterPolicyOptions} [options] - Settings applied to the policies this call registers, such as `conditionTimeoutMs`. They do not affect policies registered by other calls.
-     * @returns {WDK} The same WDK instance, for chaining.
-     * @throws {PolicyConfigurationError} If any policy or option fails validation, or a policy binds to a wallet identifier not previously passed to `registerWallet`.
-     */
-    registerPolicy(policies: Policy | Policy[], options?: RegisterPolicyOptions): WDK;
-    /**
      * Returns the wallet account for a specific blockchain and index (see BIP-44).
      *
      * @param {string} blockchain - The name of the blockchain (e.g., "ethereum").
      * @param {number} [index] - The index of the account to get (default: 0).
-     * @returns {Promise<WdkAccount>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
+     * @returns {Promise<WdkAccount>} The account, or the replacement the last middleware that returned one produced.
      * @throws {Error} If no wallet has been registered for the given blockchain.
-     * @throws {PolicyConfigurationError} If a registered policy applies but the underlying wallet account does not implement `toReadOnlyAccount()`.
      */
     getAccount(blockchain: string, index?: number): Promise<WdkAccount>;
     /**
@@ -118,9 +84,8 @@ export default class WDK {
      *
      * @param {string} blockchain - The name of the blockchain (e.g., "ethereum").
      * @param {string} path - The derivation path (e.g., "0'/0/0").
-     * @returns {Promise<WdkAccount>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
+     * @returns {Promise<WdkAccount>} The account, or the replacement the last middleware that returned one produced.
      * @throws {Error} If no wallet has been registered for the given blockchain.
-     * @throws {PolicyConfigurationError} If a registered policy applies but the underlying wallet account does not implement `toReadOnlyAccount()`.
      */
     getAccountByPath(blockchain: string, path: string): Promise<WdkAccount>;
     /**
@@ -137,8 +102,13 @@ export default class WDK {
      * @param {string[]} [blockchains] - The blockchains to dispose. If omitted, all wallets are disposed.
      */
     dispose(blockchains?: string[]): void;
-    /** @private */
-    private _applyPolicies;
+    /**
+     * Returns the derivation path recorded the first time WDK saw the account. `account.path` is a getter on real wallet
+     * accounts, so re-reading it on every retrieval would let a caller change the path later middlewares receive.
+     *
+     * @private
+     */
+    private _getAccountPath;
     /** @private */
     private _runMiddlewares;
     /** @private */
@@ -155,29 +125,29 @@ export type ProtocolConstructor<A extends any[]> = import("./wallet-account-with
  * retrieval time. Concrete wallet packages may further extend this shape.
  */
 export type WdkAccount = IWalletAccount & IWalletAccountWithProtocols;
-export type MiddlewareFunction = <A extends IWalletAccount>(account: A) => Promise<void>;
-export type Policy = import("./policy/policy-engine.js").Policy;
-export type PolicyRule = import("./policy/policy-engine.js").PolicyRule;
-export type PolicyCondition = import("./policy/policy-engine.js").PolicyCondition;
-export type PolicyContext = import("./policy/policy-engine.js").PolicyContext;
-export type PolicyAction = import("./policy/policy-engine.js").PolicyAction;
-export type PolicyScope = import("./policy/policy-engine.js").PolicyScope;
-export type PolicyOperation = import("./policy/policy-engine.js").PolicyOperation;
-export type SimulationResult = import("./policy/policy-engine.js").SimulationResult;
-export type RegisterPolicyOptions = import("./policy/policy-engine.js").RegisterPolicyOptions;
 /**
- * Instance-level settings for a WDK.
+ * Where an account came from, passed to every middleware alongside the account.
  */
-export type WdkOptions = {
+export type MiddlewareContext = {
     /**
-     * - Upper bound, in milliseconds, on the per-condition timeout any single policy can be given through `registerPolicy`. Defaults to 30000. A policy registered with a larger `conditionTimeoutMs` is capped to this value rather than rejected.
+     * - The wallet identifier the account was retrieved from (the same string passed to `registerWallet`).
      */
-    maxConditionTimeoutMs?: number;
+    blockchain: string;
     /**
-     * - Additional method names the policy proxy hands through without evaluating, unioned with `DEFAULT_POLICY_EXCLUSIONS`. Append-only — defaults cannot be removed. Names that match nothing on any registered wallet are accepted without error, so an exclusion can be added ahead of the wallet version that introduces the method.
+     * - The account index, when the account was retrieved with `getAccount`.
      */
-    policyExclusions?: string[];
+    index?: number;
+    /**
+     * - The account's full derivation path.
+     */
+    path: string;
 };
+/**
+ * A function called each time an account is retrieved. It may return a replacement account (for example a wrapper that
+ * governs the account's methods), which subsequent middlewares and the caller then receive; returning nothing keeps the
+ * account as it is.
+ */
+export type MiddlewareFunction = <A extends IWalletAccount>(account: A, context: MiddlewareContext) => Promise<A | void>;
 import WalletManager from '@tetherto/wdk-wallet';
 import { SwapProtocol } from '@tetherto/wdk-wallet/protocols';
 import { BridgeProtocol } from '@tetherto/wdk-wallet/protocols';

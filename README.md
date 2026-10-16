@@ -251,6 +251,8 @@ Policy enforcement applies to the **surface of the proxy** returned by `getAccou
 - **WDK Wallet Modules** including EVM, Solana, TON, TRON, and Bitcoin integrations
 - **Protocol Modules** registered through the WDK interface
 - **Node.js and ESM-based applications** that coordinate multiple wallet modules in one runtime
+- **Browsers**, through a bundler — see [`examples/browser`](examples/browser) for a page that runs the
+  orchestrator, the seed utilities and the policy engine, and the browser test that drives it
 
 ## Documentation
 
@@ -274,6 +276,7 @@ Policy enforcement applies to the **surface of the proxy** returned by `getAccou
 
 > For detailed walkthroughs, see the [Usage Guide](https://docs.wdk.tether.io/sdk/core-module/usage).
 > See all runnable examples in the [wdk-examples](https://github.com/tetherto/wdk-examples) repository.
+> A browser example lives in this repository, at [`examples/browser`](examples/browser), because the browser test uses it as its fixture.
 
 ## Community
 

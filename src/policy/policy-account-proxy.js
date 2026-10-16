@@ -55,36 +55,41 @@ function isProtectedMember (prop) {
 }
 
 /**
- * Wraps `subject` in a Proxy that serves `substitutions` in place of the
- * subject's own members and treats protected members as absent.
+ * Wraps `subject` in a Proxy that serves `substitutions` in place of its own
+ * members, hides protected members, and governs any callable the subject did
+ * not expose at wrap time.
  *
- * Every trap that can observe a member consults the same two rules, because a
- * `get` trap on its own guards only one of several reflective paths:
+ * Every trap applies the same rules so no reflective path disagrees: a `get`
+ * trap alone would leave `getOwnPropertyDescriptor` handing back raw values
+ * (e.g. `_signer`, or an unenforced protocol getter), and `has` / `ownKeys`
+ * would still report hidden members. Substituted members describe as their
+ * enforced value, and descriptors are reported only for members the subject
+ * owns, so inherited methods still read as inherited.
  *
- * - `getOwnPropertyDescriptor` does not route through `get`, so without a trap
- *   `Object.getOwnPropertyDescriptor(account, '_signer').value` hands back the
- *   raw signer, and — worse — `...(account, 'getSwapProtocol').value(label)`
- *   hands back the unenforced protocol getter `_registerProtocols` installed
- *   as an own property, whose methods skip policy evaluation entirely.
- * - `has` and `ownKeys` would keep reporting protected members, leaking the
- *   shape of the underlying account even where the values are hidden.
- *
- * Substituted members are described with the enforced value rather than
- * omitted, so a descriptor read observes the same member `get` returns.
- * Descriptors are only reported for members the subject actually owns, which
- * keeps prototype methods reading as inherited exactly as on a raw account.
- *
- * `preventExtensions` is refused because hiding own members is only a legal
- * Proxy result while the subject stays extensible. Letting a caller freeze the
- * subject would turn every later descriptor read or `ownKeys` call into a
- * TypeError.
+ * Only functions present at wrap time (`trusted`) run raw — the reads and
+ * lifecycle methods handed through deliberately. Any callable that appears
+ * later (assigned after wrap, added to the prototype, or a governed method
+ * re-pointed onto an excluded name) is governed and bound to the proxy, so its
+ * internal calls re-enter enforcement. `set` allows plain data writes (governed
+ * on read); `defineProperty` refuses accessors and functions, which could
+ * otherwise read protected state or be locked to serve raw. `preventExtensions`
+ * is refused, since hiding members is only legal while the subject stays
+ * extensible.
  *
  * @param {object} subject - The object to guard.
  * @param {Map<string, unknown>} substitutions - The members to serve in place of the subject's own.
+ * @param {Set<Function>} trusted - Function identities present at wrap time that may run raw; every other callable is governed when read.
+ * @param {EnforcementContext} ctx - The per-subject state used to govern callables discovered after wrap.
  * @returns {object} The guarded proxy.
  */
-function createGuardedProxy (subject, substitutions) {
-  return new Proxy(subject, {
+function createGuardedProxy (subject, substitutions, trusted, ctx) {
+  const handle = { proxy: null }
+
+  // Enforce a callable discovered after wrap, bound to the proxy so its
+  // internal calls re-enter enforcement rather than escaping to the account.
+  const govern = (prop, fn) => buildEnforcedMethod(String(prop), fn.bind(handle.proxy), ctx)
+
+  handle.proxy = new Proxy(subject, {
     get (target, prop) {
       if (substitutions.has(prop)) return substitutions.get(prop)
 
@@ -92,17 +97,17 @@ function createGuardedProxy (subject, substitutions) {
 
       const value = Reflect.get(target, prop, target)
 
-      // Bind functions to the underlying target so internal `this.method()`
-      // calls resolve on the original account, bypassing the proxy. This is
-      // how nested-call escape works without any async-context tracking.
-      //
+      if (typeof value !== 'function') return value
+
       // Inherited `Object.prototype` methods are left unbound so they keep the
       // proxy as `this`; binding `valueOf` to the target would unwrap the proxy.
-      if (typeof value === 'function' && value !== Object.prototype[prop]) {
-        return value.bind(target)
-      }
+      if (value === Object.prototype[prop]) return value
 
-      return value
+      // Wrap-time functions bind to the account (so internal `this.method()`
+      // calls keep escaping the proxy); anything newer is governed.
+      if (trusted.has(value)) return value.bind(target)
+
+      return govern(prop, value)
     },
 
     getOwnPropertyDescriptor (target, prop) {
@@ -110,14 +115,28 @@ function createGuardedProxy (subject, substitutions) {
 
       const descriptor = Reflect.getOwnPropertyDescriptor(target, prop)
 
-      if (descriptor === undefined || !substitutions.has(prop)) return descriptor
+      if (descriptor === undefined) return descriptor
 
-      return {
-        value: substitutions.get(prop),
-        writable: false,
-        enumerable: descriptor.enumerable,
-        configurable: true
+      if (substitutions.has(prop)) {
+        return {
+          value: substitutions.get(prop),
+          writable: false,
+          enumerable: descriptor.enumerable,
+          configurable: true
+        }
       }
+
+      // Mirror `get`, or a descriptor read could call the raw function.
+      if (typeof descriptor.value === 'function' && !trusted.has(descriptor.value) && descriptor.configurable) {
+        return {
+          value: govern(prop, descriptor.value),
+          writable: false,
+          enumerable: descriptor.enumerable,
+          configurable: true
+        }
+      }
+
+      return descriptor
     },
 
     has (target, prop) {
@@ -132,10 +151,51 @@ function createGuardedProxy (subject, substitutions) {
       return Reflect.ownKeys(target).filter((prop) => !isProtectedMember(prop))
     },
 
+    // Write to the target directly, not via `receiver`, which would re-enter
+    // `defineProperty` and refuse the write. An assigned callable then lands on
+    // the account and is governed on read.
+    set (target, prop, value) {
+      return Reflect.set(target, prop, value)
+    },
+
+    defineProperty (target, prop, descriptor) {
+      // Refuse accessors and functions: an accessor could read protected state,
+      // and a function belongs on the governed-on-read path via `set`.
+      if ('get' in descriptor || 'set' in descriptor || typeof descriptor.value === 'function') return false
+
+      return Reflect.defineProperty(target, prop, descriptor)
+    },
+
     preventExtensions () {
       return false
     }
   })
+
+  return handle.proxy
+}
+
+/**
+ * Builds the set of function identities the guarded proxy may serve raw: every
+ * callable present at wrap time (walking the subject's own members and the full
+ * prototype chain), minus the governed ones, which are always served through
+ * their enforced substitution. Any callable appearing later is governed on read.
+ *
+ * @param {object} subject - The account or protocol being wrapped.
+ * @param {Map<string, Function>} governedMethods - The methods being governed, keyed by name.
+ * @returns {Set<Function>} The trusted function identities.
+ */
+function collectTrustedFunctions (subject, governedMethods) {
+  const trusted = new Set()
+
+  for (let o = subject; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
+    for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(o))) {
+      if (typeof descriptor.value === 'function') trusted.add(descriptor.value)
+    }
+  }
+
+  for (const method of governedMethods.values()) trusted.delete(method)
+
+  return trusted
 }
 
 /**
@@ -230,7 +290,9 @@ export async function createPolicyEnforcedAccount (account, { blockchain, path, 
     })
   }
 
-  handle.proxy = createGuardedProxy(account, substitutions)
+  const trusted = collectTrustedFunctions(account, governedMethods)
+
+  handle.proxy = createGuardedProxy(account, substitutions, trusted, ctx)
 
   return handle.proxy
 }
@@ -356,12 +418,15 @@ function collectCallableMembers (subject, engine, methods) {
 
 function wrapProtocolInProxy (protocol, ctx) {
   const substitutions = new Map()
+  const governedMethods = collectGovernedMethods(protocol, ctx.engine)
 
-  for (const [name, method] of collectGovernedMethods(protocol, ctx.engine)) {
+  for (const [name, method] of governedMethods) {
     substitutions.set(name, buildEnforcedMethod(name, method.bind(protocol), ctx))
   }
 
-  return createGuardedProxy(protocol, substitutions)
+  const trusted = collectTrustedFunctions(protocol, governedMethods)
+
+  return createGuardedProxy(protocol, substitutions, trusted, ctx)
 }
 
 /**

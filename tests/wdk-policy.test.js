@@ -3236,6 +3236,92 @@ wdk.registerPolicy({
       expect(err.policyId).toBe('freeze')
     })
   })
+
+  describe('callables added after wrap', () => {
+    const governed = async () => {
+      wdk.registerWallet('ethereum', WalletManagerMock, {}).registerPolicy(projectDenyAll('deny'))
+
+      return wdk.getAccount('ethereum', 0)
+    }
+
+    test('a function assigned after wrap is governed, not run raw', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      const account = await governed()
+
+      account.bypass = function (tx) { return this.sendTransaction(tx) }
+
+      const err = await catchAsync(() => account.bypass({ to: RECIPIENT, value: 1n }))
+
+      expect(err).toBeInstanceOf(PolicyViolationError)
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('an assigned function is governed through its descriptor too', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      const account = await governed()
+
+      account.bypass = function (tx) { return this.sendTransaction(tx) }
+
+      const descriptor = Object.getOwnPropertyDescriptor(account, 'bypass')
+      const err = await catchAsync(() => descriptor.value({ to: RECIPIENT, value: 1n }))
+
+      expect(err).toBeInstanceOf(PolicyViolationError)
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('a prototype method added after wrap is governed, not run raw', async () => {
+      const proto = {}
+      const raw = Object.setPrototypeOf(buildAccount(), proto)
+      getAccountMock.mockResolvedValue(raw)
+
+      const account = await governed()
+
+      proto.sneak = function (tx) { return this.sendTransaction(tx) }
+
+      const err = await catchAsync(() => account.sneak({ to: RECIPIENT, value: 1n }))
+
+      expect(err).toBeInstanceOf(PolicyViolationError)
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('re-pointing an excluded name at a governed method does not bypass the engine', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      const account = await governed()
+
+      account.getBalance = sendTransactionMock
+
+      const err = await catchAsync(() => account.getBalance({ to: RECIPIENT, value: 1n }))
+
+      expect(err).toBeInstanceOf(PolicyViolationError)
+      expect(sendTransactionMock).not.toHaveBeenCalled()
+    })
+
+    test('the real excluded read still runs raw', async () => {
+      getAccountMock.mockResolvedValue(buildAccount())
+
+      const account = await governed()
+
+      await expect(account.getBalance()).resolves.toBe(DUMMY_BALANCE)
+      expect(getBalanceMock).toHaveBeenCalledTimes(1)
+    })
+
+    test('keyPair stays hidden from functions added after wrap', async () => {
+      getAccountMock.mockResolvedValue(buildAccount(PATH_DEFAULT, { keyPair: { privateKey: 'secret' } }))
+
+      const account = await governed()
+
+      account.leak = function () { return this.keyPair }
+
+      expect(account.keyPair).toBeUndefined()
+
+      const err = await catchAsync(() => account.leak())
+
+      expect(err).toBeInstanceOf(PolicyViolationError)
+    })
+  })
   // -------------------------------------------------------------------------
   // Method coverage: deny-by-default proxy + exclusion set
   // -------------------------------------------------------------------------

@@ -61,9 +61,9 @@ export default class WDK {
     /**
      * Registers a new middleware to the WDK.
      *
-     * It's possible to register multiple middlewares for the same blockchain, which will be called sequentially, after the
-     * account's protocol getters are attached. A middleware may return a replacement account: the next middleware, and
-     * finally the caller of `getAccount` or `getAccountByPath`, receive the replacement instead of the original.
+     * It's possible to register multiple middlewares for the same blockchain, which will be called sequentially, after
+     * the account's protocol getters are attached. A middleware may return a replacement account: the next middleware,
+     * and finally the caller of `getAccount` or `getAccountByPath`, receive the replacement instead of the original.
      *
      * @param {string} blockchain - The name of the blockchain the middleware must be bound to. Can be any string (e.g., "ethereum").
      * @param {MiddlewareFunction} middleware - A callback function that is called each time the user derives a new account.
@@ -103,8 +103,8 @@ export default class WDK {
      */
     dispose(blockchains?: string[]): void;
     /**
-     * Returns the derivation path recorded the first time WDK saw the account. `account.path` is a getter on real wallet
-     * accounts, so re-reading it on every retrieval would let a caller change the path later middlewares receive.
+     * Returns the derivation path WDK recorded the first time it saw the account. `account.path` is a getter on real
+     * wallet accounts, so re-reading it each time would let a caller change the path later middlewares receive.
      *
      * @private
      */
@@ -130,7 +130,7 @@ export type WdkAccount = IWalletAccount & IWalletAccountWithProtocols;
  */
 export type MiddlewareContext = {
     /**
-     * - The wallet identifier the account was retrieved from (the same string passed to `registerWallet`).
+     * - The wallet identifier the account was retrieved from, as passed to `registerWallet`.
      */
     blockchain: string;
     /**

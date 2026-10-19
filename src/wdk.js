@@ -42,7 +42,7 @@ import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol, SwidgeProt
  * Where an account came from, passed to every middleware alongside the account.
  *
  * @typedef {Object} MiddlewareContext
- * @property {string} blockchain - The wallet identifier the account was retrieved from (the same string passed to `registerWallet`).
+ * @property {string} blockchain - The wallet identifier the account was retrieved from, as passed to `registerWallet`.
  * @property {number} [index] - The account index, when the account was retrieved with `getAccount`.
  * @property {string} path - The account's full derivation path.
  */
@@ -179,9 +179,9 @@ export default class WDK {
   /**
    * Registers a new middleware to the WDK.
    *
-   * It's possible to register multiple middlewares for the same blockchain, which will be called sequentially, after the
-   * account's protocol getters are attached. A middleware may return a replacement account: the next middleware, and
-   * finally the caller of `getAccount` or `getAccountByPath`, receive the replacement instead of the original.
+   * It's possible to register multiple middlewares for the same blockchain, which will be called sequentially, after
+   * the account's protocol getters are attached. A middleware may return a replacement account: the next middleware,
+   * and finally the caller of `getAccount` or `getAccountByPath`, receive the replacement instead of the original.
    *
    * @param {string} blockchain - The name of the blockchain the middleware must be bound to. Can be any string (e.g., "ethereum").
    * @param {MiddlewareFunction} middleware - A callback function that is called each time the user derives a new account.
@@ -273,8 +273,8 @@ export default class WDK {
   }
 
   /**
-   * Returns the derivation path recorded the first time WDK saw the account. `account.path` is a getter on real wallet
-   * accounts, so re-reading it on every retrieval would let a caller change the path later middlewares receive.
+   * Returns the derivation path WDK recorded the first time it saw the account. `account.path` is a getter on real
+   * wallet accounts, so re-reading it each time would let a caller change the path later middlewares receive.
    *
    * @private
    */
@@ -300,15 +300,20 @@ export default class WDK {
     return current
   }
 
-  /** @private */
+  /**
+   * Attaches `registerProtocol` and the protocol getters to the account. Protocols are built each time a getter is
+   * called, through `account._buildProtocol(category, label, subject)`. A protocol registered on the account is built
+   * with `subject`, so a middleware's wrapper can pass itself and have the protocol's account calls go through it. A
+   * protocol registered on the WDK is always built with the original account, because published protocol packages read
+   * the account's private members in their constructors.
+   *
+   * @private
+   */
   _registerProtocols (account, { blockchain }) {
     if (this._decoratedAccounts.has(account)) return
 
     this._decoratedAccounts.add(account)
 
-    // Recipes registered via `account.registerProtocol`, built lazily in the
-    // getters so a protocol requested after a policy applies is constructed
-    // against the governed account, not a stale raw one.
     const registered = { swap: Object.create(null), bridge: Object.create(null), lending: Object.create(null), fiat: Object.create(null), swidge: Object.create(null), sda: Object.create(null) }
 
     const categoryOf = (Protocol) => {
@@ -330,10 +335,6 @@ export default class WDK {
       return account
     }
 
-    // Globals build against the raw account: published packages read
-    // `account._config` in their constructors, which the proxy hides. Per-account
-    // protocols build against `subject` (the proxy passes itself) so their own
-    // account calls stay policy-gated. `_`-prefixed to stay hidden from callers.
     account._buildProtocol = (category, label, subject = account) => {
       const global = this._protocols[category][blockchain]?.[label]
 

@@ -272,12 +272,7 @@ export default class WDK {
     }
   }
 
-  /**
-   * Returns the derivation path WDK recorded the first time it saw the account. `account.path` is a getter on real
-   * wallet accounts, so re-reading it each time would let a caller change the path later middlewares receive.
-   *
-   * @private
-   */
+  /** @private */
   _getAccountPath (account) {
     let path = this._accountPaths.get(account)
 
@@ -300,15 +295,7 @@ export default class WDK {
     return current
   }
 
-  /**
-   * Attaches `registerProtocol` and the protocol getters to the account. Protocols are built each time a getter is
-   * called, through `account._buildProtocol(category, label, subject)`. A protocol registered on the account is built
-   * with `subject`, so a middleware's wrapper can pass itself and have the protocol's account calls go through it. A
-   * protocol registered on the WDK is always built with the original account, because published protocol packages read
-   * the account's private members in their constructors.
-   *
-   * @private
-   */
+  /** @private */
   _registerProtocols (account, { blockchain }) {
     if (this._decoratedAccounts.has(account)) return
 

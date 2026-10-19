@@ -78,9 +78,9 @@ describe('WDK', () => {
     })
 
     test('should return the account a middleware replaces it with, to later middlewares and to the caller', async () => {
-      const REPLACEMENT = { getAddress: async () => '0xreplacement' }
+      const DUMMY_REPLACEMENT = { getAddress: async () => '0xdummy-replacement' }
 
-      const replacingMiddleware = jest.fn().mockResolvedValue(REPLACEMENT)
+      const replacingMiddleware = jest.fn().mockResolvedValue(DUMMY_REPLACEMENT)
 
       const laterMiddleware = jest.fn()
 
@@ -92,15 +92,15 @@ describe('WDK', () => {
 
       expect(replacingMiddleware).toHaveBeenCalledWith(DUMMY_ACCOUNT, { blockchain: 'ethereum', index: 0, path: undefined })
 
-      expect(laterMiddleware).toHaveBeenCalledWith(REPLACEMENT, { blockchain: 'ethereum', index: 0, path: undefined })
+      expect(laterMiddleware).toHaveBeenCalledWith(DUMMY_REPLACEMENT, { blockchain: 'ethereum', index: 0, path: undefined })
 
-      expect(account).toBe(REPLACEMENT)
+      expect(account).toBe(DUMMY_REPLACEMENT)
     })
 
     test('should pass middlewares the path the account had when it was first retrieved', async () => {
-      const ACCOUNT = { path: "m/44'/60'/0'/0/0" }
+      const DUMMY_ACCOUNT_WITH_PATH = { path: "m/44'/60'/0'/0/0" }
 
-      getAccountMock.mockResolvedValue(ACCOUNT)
+      getAccountMock.mockResolvedValue(DUMMY_ACCOUNT_WITH_PATH)
 
       const middleware = jest.fn()
 
@@ -109,11 +109,11 @@ describe('WDK', () => {
 
       await wdk.getAccount('ethereum', 0)
 
-      ACCOUNT.path = "m/44'/60'/0'/0/1"
+      DUMMY_ACCOUNT_WITH_PATH.path = "m/44'/60'/0'/0/1"
 
       await wdk.getAccount('ethereum', 0)
 
-      expect(middleware).toHaveBeenNthCalledWith(2, ACCOUNT, { blockchain: 'ethereum', index: 0, path: "m/44'/60'/0'/0/0" })
+      expect(middleware).toHaveBeenNthCalledWith(2, DUMMY_ACCOUNT_WITH_PATH, { blockchain: 'ethereum', index: 0, path: "m/44'/60'/0'/0/0" })
     })
 
     test('should throw if no wallet has been registered for the given blockchain', async () => {
@@ -133,7 +133,7 @@ describe('WDK', () => {
           Object.setPrototypeOf(SwapProtocolMock.prototype, SwapProtocol.prototype)
         })
 
-        test('should build the swap protocol registered for the account with the wrapper a middleware returns, when the wrapper requests it', async () => {
+        test("should build the account's swap protocol with the wrapper that requests it", async () => {
           let wrapper
 
           const middleware = async (account) => {
@@ -156,10 +156,10 @@ describe('WDK', () => {
 
           expect(SwapProtocolMock).toHaveBeenCalledWith(wrapper, SWAP_CONFIG)
 
-          expect(protocol).toBeInstanceOf(SwapProtocolMock)
+          expect(protocol).toBe(SwapProtocolMock.mock.instances[0])
         })
 
-        test("should build the swap protocol registered for the account's blockchain with the original account, even when a middleware's wrapper requests it", async () => {
+        test("should build the blockchain's swap protocol with the original account, even for a wrapper", async () => {
           let wrapper
 
           const middleware = async (account) => {
@@ -496,9 +496,9 @@ describe('WDK', () => {
     })
 
     test('should return the account a middleware replaces it with', async () => {
-      const REPLACEMENT = { getAddress: async () => '0xreplacement' }
+      const DUMMY_REPLACEMENT = { getAddress: async () => '0xdummy-replacement' }
 
-      const middleware = jest.fn().mockResolvedValue(REPLACEMENT)
+      const middleware = jest.fn().mockResolvedValue(DUMMY_REPLACEMENT)
 
       wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
                 .registerMiddleware('ethereum', middleware)
@@ -507,7 +507,7 @@ describe('WDK', () => {
 
       expect(middleware).toHaveBeenCalledWith(DUMMY_ACCOUNT, { blockchain: 'ethereum', path: undefined })
 
-      expect(account).toBe(REPLACEMENT)
+      expect(account).toBe(DUMMY_REPLACEMENT)
     })
 
     test('should throw if no wallet has been registered for the given blockchain', async () => {

@@ -102,12 +102,7 @@ export default class WDK {
      * @param {string[]} [blockchains] - The blockchains to dispose. If omitted, all wallets are disposed.
      */
     dispose(blockchains?: string[]): void;
-    /**
-     * Returns the derivation path WDK recorded the first time it saw the account. `account.path` is a getter on real
-     * wallet accounts, so re-reading it each time would let a caller change the path later middlewares receive.
-     *
-     * @private
-     */
+    /** @private */
     private _getAccountPath;
     /** @private */
     private _runMiddlewares;

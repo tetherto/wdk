@@ -18,8 +18,6 @@ import WalletManager from '@tetherto/wdk-wallet'
 
 import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol, SwidgeProtocol, SdaProtocol } from '@tetherto/wdk-wallet/protocols'
 
-import PolicyEngine from './policy/policy-engine.js'
-
 /** @typedef {import('@tetherto/wdk-wallet').IWalletAccount} IWalletAccount */
 
 /** @typedef {import('@tetherto/wdk-wallet').FeeRates} FeeRates */
@@ -40,32 +38,21 @@ import PolicyEngine from './policy/policy-engine.js'
  * @typedef {IWalletAccount & IWalletAccountWithProtocols} WdkAccount
  */
 
-/** @typedef {<A extends IWalletAccount>(account: A) => Promise<void>} MiddlewareFunction */
-
-/** @typedef {import('./policy/policy-engine.js').Policy} Policy */
-
-/** @typedef {import('./policy/policy-engine.js').PolicyRule} PolicyRule */
-
-/** @typedef {import('./policy/policy-engine.js').PolicyCondition} PolicyCondition */
-
-/** @typedef {import('./policy/policy-engine.js').PolicyContext} PolicyContext */
-
-/** @typedef {import('./policy/policy-engine.js').PolicyAction} PolicyAction */
-
-/** @typedef {import('./policy/policy-engine.js').PolicyScope} PolicyScope */
-
-/** @typedef {import('./policy/policy-engine.js').PolicyOperation} PolicyOperation */
-
-/** @typedef {import('./policy/policy-engine.js').SimulationResult} SimulationResult */
-
-/** @typedef {import('./policy/policy-engine.js').RegisterPolicyOptions} RegisterPolicyOptions */
+/**
+ * Where an account came from, passed to every middleware alongside the account.
+ *
+ * @typedef {Object} MiddlewareContext
+ * @property {string} blockchain - The wallet identifier the account was retrieved from, as passed to `registerWallet`.
+ * @property {number} [index] - The account index, when the account was retrieved with `getAccount`.
+ * @property {string} path - The account's full derivation path.
+ */
 
 /**
- * Instance-level settings for a WDK.
+ * A function called each time an account is retrieved. It may return a replacement account (for example a wrapper that
+ * governs the account's methods), which subsequent middlewares and the caller then receive; returning nothing keeps the
+ * account as it is.
  *
- * @typedef {Object} WdkOptions
- * @property {number} [maxConditionTimeoutMs] - Upper bound, in milliseconds, on the per-condition timeout any single policy can be given through `registerPolicy`. Defaults to 30000. A policy registered with a larger `conditionTimeoutMs` is capped to this value rather than rejected.
- * @property {string[]} [policyExclusions] - Additional method names the policy proxy hands through without evaluating, unioned with `DEFAULT_POLICY_EXCLUSIONS`. Append-only — defaults cannot be removed. Names that match nothing on any registered wallet are accepted without error, so an exclusion can be added ahead of the wallet version that introduces the method.
+ * @typedef {<A extends IWalletAccount>(account: A, context: MiddlewareContext) => Promise<A | void>} MiddlewareFunction
  */
 
 export default class WDK {
@@ -73,13 +60,9 @@ export default class WDK {
    * Creates a new WDK.
    *
    * @param {string | Uint8Array} seed - A BIP-39 mnemonic seed phrase, or a raw BIP-32 master seed (16-64 bytes).
-   * @param {WdkOptions} [options] - Instance-level settings such as `maxConditionTimeoutMs` and `policyExclusions`.
    * @throws {Error} If the seed is not valid.
-   * @throws {PolicyConfigurationError} If `options` is not a plain object.
-   * @throws {PolicyConfigurationError} If `maxConditionTimeoutMs` is not a finite positive number.
-   * @throws {PolicyConfigurationError} If `policyExclusions` is not an array of non-empty strings.
    */
-  constructor (seed, options) {
+  constructor (seed) {
     if (!WDK.isValidSeed(seed)) {
       throw new Error('Invalid seed.')
     }
@@ -95,9 +78,6 @@ export default class WDK {
 
     /** @private */
     this._middlewares = Object.create(null)
-
-    /** @private */
-    this._policyEngine = new PolicyEngine(options)
 
     /** @private */
     this._decoratedAccounts = new WeakSet()
@@ -199,7 +179,9 @@ export default class WDK {
   /**
    * Registers a new middleware to the WDK.
    *
-   * It's possible to register multiple middlewares for the same blockchain, which will be called sequentially.
+   * It's possible to register multiple middlewares for the same blockchain, which will be called sequentially, after
+   * the account's protocol getters are attached. A middleware may return a replacement account: the next middleware,
+   * and finally the caller of `getAccount` or `getAccountByPath`, receive the replacement instead of the original.
    *
    * @param {string} blockchain - The name of the blockchain the middleware must be bound to. Can be any string (e.g., "ethereum").
    * @param {MiddlewareFunction} middleware - A callback function that is called each time the user derives a new account.
@@ -214,54 +196,12 @@ export default class WDK {
   }
 
   /**
-   * Returns the resolved set of method names the policy proxy hands through
-   * without consulting the engine — `DEFAULT_POLICY_EXCLUSIONS` unioned with
-   * any `policyExclusions` passed to the constructor.
-   *
-   * Every other callable on a governed account is evaluated, so this list is
-   * the complete inventory of what policies cannot gate on this instance.
-   *
-   * @returns {readonly string[]} The frozen resolved exclusion set. Mutating the return value does not affect the engine.
-   */
-  getPolicyExclusions () {
-    return this._policyEngine.getExclusions()
-  }
-
-  /**
-   * Registers one or more transaction policies that will be evaluated before
-   * any wrapped account or protocol method is allowed to execute.
-   *
-   * Each policy's `wallet` field (optional for `scope: 'project'`, required
-   * for `scope: 'account'`) declares which wallet identifier(s) it binds to.
-   * A wallet identifier is the same string passed to `registerWallet` — it
-   * might be a chain name like `"ethereum"`, but it could equally be
-   * `"treasury-cold"` or any label the consumer chose. Omitting `wallet` on
-   * a project-scope policy applies it across every registered wallet.
-   *
-   * Multiple `registerPolicy` calls stack. If a policy with the same id is
-   * registered twice into the same binding, the second call replaces the first.
-   *
-   * @param {Policy | Policy[]} policies - A single policy or array of policies to register on this WDK instance.
-   * @param {RegisterPolicyOptions} [options] - Settings applied to the policies this call registers, such as `conditionTimeoutMs`. They do not affect policies registered by other calls.
-   * @returns {WDK} The same WDK instance, for chaining.
-   * @throws {PolicyConfigurationError} If any policy or option fails validation, or a policy binds to a wallet identifier not previously passed to `registerWallet`.
-   */
-  registerPolicy (policies, options) {
-    const knownWallets = new Set(this._wallets.keys())
-
-    this._policyEngine.register(policies, options, { knownWallets })
-
-    return this
-  }
-
-  /**
    * Returns the wallet account for a specific blockchain and index (see BIP-44).
    *
    * @param {string} blockchain - The name of the blockchain (e.g., "ethereum").
    * @param {number} [index] - The index of the account to get (default: 0).
-   * @returns {Promise<WdkAccount>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
+   * @returns {Promise<WdkAccount>} The account, or the replacement the last middleware that returned one produced.
    * @throws {Error} If no wallet has been registered for the given blockchain.
-   * @throws {PolicyConfigurationError} If a registered policy applies but the underlying wallet account does not implement `toReadOnlyAccount()`.
    */
   async getAccount (blockchain, index = 0) {
     if (!this._wallets.has(blockchain)) {
@@ -272,11 +212,9 @@ export default class WDK {
 
     const account = await wallet.getAccount(index)
 
-    await this._runMiddlewares(account, { blockchain })
-
     this._registerProtocols(account, { blockchain })
 
-    return this._applyPolicies(account, { blockchain, index })
+    return await this._runMiddlewares(account, { blockchain, index, path: this._getAccountPath(account) })
   }
 
   /**
@@ -284,9 +222,8 @@ export default class WDK {
    *
    * @param {string} blockchain - The name of the blockchain (e.g., "ethereum").
    * @param {string} path - The derivation path (e.g., "0'/0/0").
-   * @returns {Promise<WdkAccount>} The account. When at least one registered policy targets this account, the returned object is a Proxy that throws `PolicyViolationError` from any wrapped write method whose policy evaluation yields a DENY.
+   * @returns {Promise<WdkAccount>} The account, or the replacement the last middleware that returned one produced.
    * @throws {Error} If no wallet has been registered for the given blockchain.
-   * @throws {PolicyConfigurationError} If a registered policy applies but the underlying wallet account does not implement `toReadOnlyAccount()`.
    */
   async getAccountByPath (blockchain, path) {
     if (!this._wallets.has(blockchain)) {
@@ -297,11 +234,9 @@ export default class WDK {
 
     const account = await wallet.getAccountByPath(path)
 
-    await this._runMiddlewares(account, { blockchain })
-
     this._registerProtocols(account, { blockchain })
 
-    return this._applyPolicies(account, { blockchain })
+    return await this._runMiddlewares(account, { blockchain, path: this._getAccountPath(account) })
   }
 
   /**
@@ -333,22 +268,12 @@ export default class WDK {
       if (!blockchains || blockchains.includes(blockchain)) {
         wallet.dispose()
         this._wallets.delete(blockchain)
-        this._policyEngine.disposeWallet(blockchain)
       }
-    }
-
-    if (!blockchains) {
-      this._policyEngine.disposeAll()
     }
   }
 
   /** @private */
-  async _applyPolicies (account, { blockchain, index }) {
-    // Record each raw account's derivation path the first time WDK sees it, and
-    // route policy evaluation through that. `account.path` is a prototype getter
-    // on real wallet accounts, so re-reading it lets a caller spoof the path
-    // (reassigning it, swapping the prototype, or returning the raw account from
-    // an added method) and make a later `getAccount()` skip the wrap.
+  _getAccountPath (account) {
     let path = this._accountPaths.get(account)
 
     if (path === undefined) {
@@ -356,16 +281,18 @@ export default class WDK {
       this._accountPaths.set(account, path)
     }
 
-    return this._policyEngine.applyPoliciesTo(account, { blockchain, path, index })
+    return path
   }
 
   /** @private */
-  async _runMiddlewares (account, { blockchain }) {
-    if (this._middlewares[blockchain]) {
-      for (const middleware of this._middlewares[blockchain]) {
-        await middleware(account)
-      }
+  async _runMiddlewares (account, context) {
+    let current = account
+
+    for (const middleware of this._middlewares[context.blockchain] ?? []) {
+      current = (await middleware(current, context)) ?? current
     }
+
+    return current
   }
 
   /** @private */
@@ -374,9 +301,6 @@ export default class WDK {
 
     this._decoratedAccounts.add(account)
 
-    // Recipes registered via `account.registerProtocol`, built lazily in the
-    // getters so a protocol requested after a policy applies is constructed
-    // against the governed account, not a stale raw one.
     const registered = { swap: Object.create(null), bridge: Object.create(null), lending: Object.create(null), fiat: Object.create(null), swidge: Object.create(null), sda: Object.create(null) }
 
     const categoryOf = (Protocol) => {
@@ -398,10 +322,6 @@ export default class WDK {
       return account
     }
 
-    // Globals build against the raw account: published packages read
-    // `account._config` in their constructors, which the proxy hides. Per-account
-    // protocols build against `subject` (the proxy passes itself) so their own
-    // account calls stay policy-gated. `_`-prefixed to stay hidden from callers.
     account._buildProtocol = (category, label, subject = account) => {
       const global = this._protocols[category][blockchain]?.[label]
 

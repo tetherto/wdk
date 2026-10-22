@@ -1,6 +1,6 @@
 {
   "name": "@tetherto/wdk",
-  "version": "1.0.0-beta.21",
+  "version": "1.0.0-beta.22",
   "description": "Core wallet and protocol manager for WDK (Wallet Development Kit) by Tether.",
   "homepage": "https://docs.wdk.tether.io/sdk/core-module/",
   "keywords": [

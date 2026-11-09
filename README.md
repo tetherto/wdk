@@ -10,6 +10,8 @@
 A flexible manager for orchestrating WDK wallet and protocol modules through a single interface. This package lets you register blockchain-specific wallet managers, derive accounts, and coordinate multi-chain wallet flows from one WDK instance.
 
 ## About WDK
+![wdk image](images/wdkimage.png)
+
 
 This module is part of [**WDK (Wallet Development Kit) by Tether**](https://docs.wdk.tether.io/), which empowers developers to build secure, non-custodial wallets with unified blockchain access, stateless architecture, and complete user control.
 

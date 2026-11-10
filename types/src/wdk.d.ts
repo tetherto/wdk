@@ -133,16 +133,16 @@ export type MiddlewareContext = {
      */
     index?: number;
     /**
-     * - The account's full derivation path.
+     * - The account's full derivation path, or null if the account is not bound to a BIP-44 position.
      */
-    path: string;
+    path: string | null;
 };
 /**
  * A function called each time an account is retrieved. It may return a replacement account (for example a wrapper that
  * governs the account's methods), which subsequent middlewares and the caller then receive; returning nothing keeps the
  * account as it is.
  */
-export type MiddlewareFunction = <A extends IWalletAccount>(account: A, context: MiddlewareContext) => Promise<A | void>;
+export type MiddlewareFunction = <A extends IWalletAccount>(account: A, context: MiddlewareContext) => Promise<IWalletAccount | void>;
 import WalletManager from '@tetherto/wdk-wallet';
 import { SwapProtocol } from '@tetherto/wdk-wallet/protocols';
 import { BridgeProtocol } from '@tetherto/wdk-wallet/protocols';

@@ -44,7 +44,7 @@ import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol, SwidgeProt
  * @typedef {Object} MiddlewareContext
  * @property {string} blockchain - The wallet identifier the account was retrieved from, as passed to `registerWallet`.
  * @property {number} [index] - The account index, when the account was retrieved with `getAccount`.
- * @property {string} path - The account's full derivation path.
+ * @property {string | null} path - The account's full derivation path, or null if the account is not bound to a BIP-44 position.
  */
 
 /**
@@ -52,7 +52,7 @@ import { SwapProtocol, BridgeProtocol, LendingProtocol, FiatProtocol, SwidgeProt
  * governs the account's methods), which subsequent middlewares and the caller then receive; returning nothing keeps the
  * account as it is.
  *
- * @typedef {<A extends IWalletAccount>(account: A, context: MiddlewareContext) => Promise<A | void>} MiddlewareFunction
+ * @typedef {<A extends IWalletAccount>(account: A, context: MiddlewareContext) => Promise<IWalletAccount | void>} MiddlewareFunction
  */
 
 export default class WDK {

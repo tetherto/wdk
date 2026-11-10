@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@tetherto/wdk-wallet": "^1.0.0-beta.15",
-    "bare-node-runtime": "^1.4.0"
+    "bare-node-runtime": "^1.5.2"
   },
   "devDependencies": {
     "cross-env": "7.0.3",

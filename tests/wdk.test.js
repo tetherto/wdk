@@ -116,6 +116,21 @@ describe('WDK', () => {
       expect(middleware).toHaveBeenNthCalledWith(2, DUMMY_ACCOUNT_WITH_PATH, { blockchain: 'ethereum', index: 0, path: "m/44'/60'/0'/0/0" })
     })
 
+    test('should pass middlewares a null path for an account not bound to a BIP-44 position', async () => {
+      const DUMMY_ACCOUNT_WITHOUT_PATH = { path: null }
+
+      getAccountMock.mockResolvedValue(DUMMY_ACCOUNT_WITHOUT_PATH)
+
+      const middleware = jest.fn()
+
+      wdk.registerWallet('ethereum', WalletManagerMock, CONFIG)
+                .registerMiddleware('ethereum', middleware)
+
+      await wdk.getAccount('ethereum', 0)
+
+      expect(middleware).toHaveBeenCalledWith(DUMMY_ACCOUNT_WITHOUT_PATH, { blockchain: 'ethereum', index: 0, path: null })
+    })
+
     test('should throw if no wallet has been registered for the given blockchain', async () => {
       await expect(wdk.getAccount('ethereum', 0))
         .rejects.toThrow('No wallet registered for blockchain: ethereum.')

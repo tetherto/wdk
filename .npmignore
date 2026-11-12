@@ -3,3 +3,4 @@ coverage
 tests
 tsconfig.json
 .github
+examples

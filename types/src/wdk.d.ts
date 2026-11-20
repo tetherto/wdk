@@ -97,7 +97,9 @@ export default class WDK {
      */
     getFeeRates(blockchain: string): Promise<FeeRates>;
     /**
-     * Disposes and unregisters wallets, erasing any sensitive data from memory.
+     * Disposes and unregisters wallets, calling each wallet's `dispose` method (the wallet module documents what it
+     * clears). The WDK keeps its seed, so wallets can be registered again after disposal. A seed phrase passed as a
+     * string cannot be wiped: it stays in memory until it is garbage collected.
      * If no blockchains are specified, all registered wallets are disposed.
      * @param {string[]} [blockchains] - The blockchains to dispose. If omitted, all wallets are disposed.
      */

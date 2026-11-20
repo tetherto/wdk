@@ -58,7 +58,7 @@ wdk.dispose()
 - **Protocol Registration Support**: Attach swap, bridge, lending, fiat, and swidge protocols to registered blockchains
 - **Middleware Hooks**: Intercept account derivation with custom middleware
 - **Seed Utilities**: Generate and validate BIP-39 seed phrases
-- **Selective Disposal**: Dispose specific registered wallets or clear the full WDK instance
+- **Selective Disposal**: Dispose specific registered wallets or all of them
 
 ## Middleware
 
